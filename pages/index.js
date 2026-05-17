@@ -1,5 +1,8 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import Head from 'next/head';
+import { useState, useEffect, useMemo, useRef } from 'react'
+import Head from 'next/head'
+import { supabase } from '../lib/supabase'
+import * as db from '../lib/db'
+
 
 const V = 'v3.2';
 const S = k => `wh:${k}`;
@@ -91,71 +94,144 @@ h2 { font-size: clamp(16px, 4.5vw, 20px); }
 `;
 
 export default function App() {
-  const [rdy, setRdy] = useState(false);
-  const [user, setUser] = useState(null);
-  const [scr, setScr] = useState('home');
-  const [habits, setHab] = useState([]);
-  const [logs, setLogs] = useState([]);
-  const [quotes, setQ] = useState([]);
-  const [affirm, setAf] = useState('');
-  const [skips, setSk] = useState([]);
-  const [unplanned, setUp] = useState([]);
-  const [reflections, setRef] = useState([]);
-  const [refSections, setRefSec] = useState(DEFAULT_REF_SECTIONS);
-  const [ideas, setIdeas] = useState([]);
-  const [quickIds, setQuick] = useState(DQK);
-  const [undo, setUndo] = useState([]);
-  const [aId, setAId] = useState(null);
-  const [eId, setEId] = useState(null);
-  const [eLTs, setELTs] = useState(null);
-  const [tmrs, setTmrs] = useState({});
-  const [tick, setTick] = useState(0);
-  const [toast, setToast] = useState(null);
-  const [menu, setMenu] = useState(false);
-  const [qkO, setQkO] = useState(null);
-  const [xp, setXp] = useState(0);
-  const [achPop, setAchPop] = useState(null);
+  const [rdy, setRdy] = useState(false)
+  const [user, setUser] = useState(null)
+  const [scr, setScr] = useState('home')
+  const [habits, setHab] = useState([])
+  const [logs, setLogs] = useState([])
+  const [quotes, setQ] = useState(DQ)
+  const [affirm, setAf] = useState(DA)
+  const [skips, setSk] = useState([])
+  const [unplanned, setUp] = useState([])
+  const [reflections, setRef] = useState([])
+  const [refSections, setRefSec] = useState(DEFAULT_REF_SECTIONS)
+  const [ideas, setIdeas] = useState([])
+  const [quickIds, setQuick] = useState(DQK)
+  const [undo, setUndo] = useState([])
+  const [aId, setAId] = useState(null)
+  const [eId, setEId] = useState(null)
+  const [eLTs, setELTs] = useState(null)
+  const [tmrs, setTmrs] = useState({})
+  const [tick, setTick] = useState(0)
+  const [toast, setToast] = useState(null)
+  const [menu, setMenu] = useState(false)
+  const [qkO, setQkO] = useState(null)
+  const [xp, setXp] = useState(0)
+  const [achPop, setAchPop] = useState(null)
 
-  useEffect(() => { (async () => {
-    setUser(await ld('user', null));
-    setHab(await ld('habits:v6', DH));
-    setLogs(await ld('logs:v6', []));
-    setQ(await ld('quotes:v5', DQ));
-    setAf(await ld('affirm:v4', DA));
-    setSk(await ld('skips:v5', []));
-    setUp(await ld('unplanned:v5', []));
-    setRef(await ld('reflect:v4', []));
-    setRefSec(await ld('refSec:v2', DEFAULT_REF_SECTIONS));
-    setIdeas(await ld('ideas:v3', []));
-    setQuick(await ld('quick:v3', DQK));
-    setUndo(await ld('undo:v5', []));
-    setXp(await ld('xp:v1', 0));
-    setRdy(true);
-  })(); }, []);
+  // Auth listener
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      const u = data.session?.user || null
+      setUser(u)
+      if (u) loadAll(u)
+      else setRdy(true)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
+      const u = session?.user || null
+      setUser(u)
+      if (u) loadAll(u)
+      else { setRdy(true); setHab([]); setLogs([]) }
+    })
+    return () => subscription.unsubscribe()
+  }, [])
 
-  useEffect(() => { const i = setInterval(() => setTick(t => t + 1), 1000); return () => clearInterval(i); }, []);
-  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 3500); return () => clearTimeout(t); }, [toast]);
-  useEffect(() => { if (!achPop) return; const t = setTimeout(() => setAchPop(null), 3000); return () => clearTimeout(t); }, [achPop]);
+  const loadAll = async (u) => {
+    const [h, l, sk, rf, id, set] = await Promise.all([
+      db.loadHabits(u.id, DH),
+      db.loadLogs(u.id),
+      db.loadSkips(u.id),
+      db.loadReflections(u.id),
+      db.loadIdeas(u.id),
+      db.loadSettings(u.id),
+    ])
+    setHab(h); setLogs(l); setSk(sk); setRef(rf); setIdeas(id)
+    if (set.quotes) setQ(set.quotes)
+    if (set.affirm) setAf(set.affirm)
+    if (set.refSections) setRefSec(set.refSections)
+    if (set.quickIds) setQuick(set.quickIds)
+    if (set.xp) setXp(set.xp)
+    setRdy(true)
+  }
 
-  const show = (m, a) => setToast({ m, a });
-  const gainXp = async (amt = 5) => { const n = xp + amt; setXp(n); await sv('xp:v1', n); const ol = getLevel(xp), nl = getLevel(n); if (nl.idx > ol.idx) setAchPop(`${nl.icon} Уровень: ${nl.name}!`); };
-  const addLog = async e => { const l = { ts: Date.now(), ...e }; const n = [l, ...logs]; setLogs(n); await sv('logs:v6', n); gainXp(5); };
-  const delLog = async ts => { const e = logs.find(l => l.ts === ts); if (e) { const u = [{ type: 'log', data: e }, ...undo.slice(0, 19)]; setUndo(u); await sv('undo:v5', u); } const n = logs.filter(l => l.ts !== ts); setLogs(n); await sv('logs:v6', n); show('Удалено', () => undoAct()); };
-  const updLog = async (ts, u2) => { const n = logs.map(l => l.ts === ts ? { ...l, ...u2 } : l); setLogs(n); await sv('logs:v6', n); show('Обновлено'); };
-  const undoAct = async () => { if (!undo.length) return; const [last, ...rest] = undo; if (last.type === 'log') { const n = [last.data, ...logs]; setLogs(n); await sv('logs:v6', n); } if (last.type === 'habit') { const n = [last.data, ...habits]; setHab(n); await sv('habits:v6', n); } if (last.type === 'idea') { const n = [last.data, ...ideas]; setIdeas(n); await sv('ideas:v3', n); } setUndo(rest); await sv('undo:v5', rest); show('Отменено ✓'); };
+  const saveSetting = async (key, val) => {
+    if (!user) return
+    const cur = { quotes, affirm, refSections, quickIds, xp }
+    const upd = { ...cur, [key]: val }
+    await db.saveSettings(user.id, upd)
+  }
 
-  const stTmr = id => setTmrs(t => ({ ...t, [id]: Date.now() }));
-  const spTmr = (id, n = '') => { const s = tmrs[id]; if (!s) return; const m = Math.round((Date.now() - s) / 60000 * 10) / 10; addLog({ habitId: id, value: m, start: s, end: Date.now(), note: n }); setTmrs(t => { const { [id]: _, ...r } = t; return r; }); };
-  const cTmr = id => setTmrs(t => { const { [id]: _, ...r } = t; return r; });
-  const go = s => { setScr(s); setMenu(false); setQkO(null); };
-  const goH = id => { setAId(id); setScr('detail'); setMenu(false); setQkO(null); };
+  useEffect(() => { const i = setInterval(() => setTick(t => t + 1), 1000); return () => clearInterval(i) }, [])
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 3500); return () => clearTimeout(t) }, [toast])
+  useEffect(() => { if (!achPop) return; const t = setTimeout(() => setAchPop(null), 3000); return () => clearTimeout(t) }, [achPop])
 
-  if (!rdy) return (<div className="min-h-screen bg-zinc-950 flex items-center justify-center"><style>{CSS}</style><div className="text-zinc-500 text-lg">Загрузка...</div></div>);
-  if (!user) return (<AuthScreen onAuth={async u => { setUser(u); await sv('user', u); }} />);
+  const show = (m, a) => setToast({ m, a })
 
-  const habit = habits.find(h => h.id === aId);
-  const actH = habits.filter(h => !h.archived);
-  const p = { habits: actH, allHabits: habits, logs, skips, unplanned, reflections, refSections, tmrs, tick, quotes, affirm, user, quickIds, ideas, xp };
+  const gainXp = async (amt = 5) => {
+    const n = xp + amt; setXp(n)
+    const ol = getLevel(xp), nl = getLevel(n)
+    if (nl.idx > ol.idx) setAchPop(`${nl.icon} Уровень: ${nl.name}!`)
+    if (user) await saveSetting('xp', n)
+  }
+
+  const addLogFn = async e => {
+    const l = { ts: Date.now(), ...e }
+    if (user) { const saved = await db.addLog(user.id, l); const n = [saved, ...logs]; setLogs(n) }
+    else setLogs(p => [l, ...p])
+    gainXp(5)
+  }
+
+  const delLog = async ts => {
+    const e = logs.find(l => l.ts === ts)
+    if (e) setUndo(u => [{ type: 'log', data: e }, ...u.slice(0, 19)])
+    if (user) await db.deleteLog(user.id, ts)
+    setLogs(p => p.filter(l => l.ts !== ts))
+    show('Удалено', () => undoAct())
+  }
+
+  const updLog = async (ts, u2) => {
+    if (user) await db.updateLog(user.id, ts, u2)
+    setLogs(p => p.map(l => l.ts === ts ? { ...l, ...u2 } : l))
+    show('Обновлено')
+  }
+
+  const undoAct = async () => {
+    if (!undo.length) return
+    const [last, ...rest] = undo
+    if (last.type === 'log') { await addLogFn(last.data) }
+    if (last.type === 'idea') {
+      if (user) { const saved = await db.addIdea(user.id, last.data); setIdeas(p => [saved, ...p]) }
+      else setIdeas(p => [last.data, ...p])
+    }
+    setUndo(rest); show('Отменено ✓')
+  }
+
+  const stTmr = id => setTmrs(t => ({ ...t, [id]: Date.now() }))
+  const spTmr = (id, n = '') => {
+    const s = tmrs[id]; if (!s) return
+    const m = Math.round((Date.now() - s) / 60000 * 10) / 10
+    addLogFn({ habitId: id, value: m, start: s, end: Date.now(), note: n })
+    setTmrs(t => { const { [id]: _, ...r } = t; return r })
+  }
+  const cTmr = id => setTmrs(t => { const { [id]: _, ...r } = t; return r })
+  const go = s => { setScr(s); setMenu(false); setQkO(null) }
+  const goH = id => { setAId(id); setScr('detail'); setMenu(false); setQkO(null) }
+
+  if (!rdy) return (
+    <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
+      <style>{CSS}</style>
+      <div className="text-center">
+        <div className="text-4xl font-black text-violet-500 mb-2">WH</div>
+        <div className="text-zinc-500">Загрузка...</div>
+      </div>
+    </div>
+  )
+
+  if (!user) return <AuthScreen onAuth={() => {}} />
+
+  const habit = habits.find(h => h.id === aId)
+  const actH = habits.filter(h => !h.archived)
+  const p = { habits: actH, allHabits: habits, logs, skips, unplanned, reflections, refSections, tmrs, tick, quotes, affirm, user, quickIds, ideas, xp }
 
   return (
     <>
@@ -168,46 +244,95 @@ export default function App() {
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="WildHabits" />
         <link rel="manifest" href="/manifest.json" />
+        <link rel="apple-touch-icon" href="/icon-512.png" />
       </Head>
       <div className="min-h-screen bg-zinc-950 text-zinc-100">
-      <style>{CSS}</style>
-      {menu && <MenuOvl onClose={() => setMenu(false)} go={go} undo={undo} onUndo={undoAct} xp={xp} />}
-      {toast && <Toast m={toast.m} a={toast.a} onX={() => setToast(null)} />}
-      {achPop && <AchPop text={achPop} />}
+        <style>{CSS}</style>
+        {menu && <MenuOvl onClose={() => setMenu(false)} go={go} undo={undo} onUndo={undoAct} xp={xp} />}
+        {toast && <Toast m={toast.m} a={toast.a} onX={() => setToast(null)} />}
+        {achPop && <AchPop text={achPop} />}
 
-      {scr === 'home' && <Home {...p} onMenu={() => setMenu(true)} onH={goH} onSkip={async (id, r) => { const n = [{ habitId: id, date: tk(), reason: r, ts: Date.now() }, ...skips]; setSk(n); await sv('skips:v5', n); show('Пропуск'); }} onUnplanned={async e => { const n = [{ ts: Date.now(), date: tk(), ...e }, ...unplanned]; setUp(n); await sv('unplanned:v5', n); show('Записано'); }} onReflect={async r => { const n = reflections.filter(x => x.date !== r.date); setRef([r, ...n]); await sv('reflect:v4', [r, ...n]); }} addLog={addLog} qkO={qkO} setQkO={setQkO} onAddIdea={async idea => { const n = [{ id: Date.now(), date: tk(), time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }), text: idea.text, category: idea.category || '', priority: idea.priority || 'medium', done: false }, ...ideas]; setIdeas(n); await sv('ideas:v3', n); show('Идея ✓'); gainXp(3); }} />}
-      {scr === 'detail' && habit && <Detail habit={habit} logs={logs} timer={tmrs[habit.id]} tick={tick} affirm={affirm} onBack={() => go('home')} addLog={addLog} delLog={delLog} updLog={updLog} stTmr={() => stTmr(habit.id)} spTmr={n => spTmr(habit.id, n)} cTmr={() => cTmr(habit.id)} onSkip={async (id, r) => { const n = [{ habitId: id, date: tk(), reason: r, ts: Date.now() }, ...skips]; setSk(n); await sv('skips:v5', n); show('Пропуск'); }} eLTs={eLTs} setELTs={setELTs} habits={habits} setHab={setHab} />}
-      {scr === 'allHabits' && <AllH habits={habits} onBack={() => go('home')} onH={goH} onEdit={id => { setEId(id); go('editH'); }} onDel={async id => { const h = habits.find(x => x.id === id); if (h) { const u = [{ type: 'habit', data: h }, ...undo.slice(0, 19)]; setUndo(u); await sv('undo:v5', u); } const n = habits.filter(x => x.id !== id); setHab(n); await sv('habits:v6', n); show('Удалено', () => undoAct()); }} onAdd={() => { setEId(null); go('editH'); }} onArch={async id => { const n = habits.map(h => h.id === id ? { ...h, archived: !h.archived } : h); setHab(n); await sv('habits:v6', n); show('Обновлено'); }} />}
-      {scr === 'editH' && <EditH habit={eId ? habits.find(h => h.id === eId) : null} onBack={() => go('allHabits')} onSave={async h => { if (eId) { const n = habits.map(x => x.id === h.id ? h : x); setHab(n); await sv('habits:v6', n); } else { const n = [...habits, { ...h, id: 'H' + Date.now(), archived: false }]; setHab(n); await sv('habits:v6', n); } go('allHabits'); show(eId ? 'Обновлено' : 'Добавлено ✓'); }} />}
-      {scr === 'plan' && <Plan habits={actH} logs={logs} onBack={() => go('home')} />}
-      {scr === 'stats' && <Stats logs={logs} habits={actH} skips={skips} onBack={() => go('home')} />}
-      {scr === 'ach' && <Ach logs={logs} habits={actH} xp={xp} onBack={() => go('home')} />}
-      {scr === 'mot' && <Mot quotes={quotes} onBack={() => go('home')} onSave={async q => { setQ(q); await sv('quotes:v5', q); show('Сохранено'); }} />}
-      {scr === 'aff' && <AffScr text={affirm} onBack={() => go('home')} onSave={async t => { setAf(t); await sv('affirm:v4', t); show('Сохранено'); }} />}
-      {scr === 'ideas' && <IdeasScr ideas={ideas} onBack={() => go('home')} onUpd={async i => { setIdeas(i); await sv('ideas:v3', i); }} show={show} undo={undo} setUndo={setUndo} />}
-      {scr === 'refH' && <RefHist reflections={reflections} refSections={refSections} onBack={() => go('home')} onUpd={async r => { setRef(r); await sv('reflect:v4', r); show('Обновлено'); }} onSaveSec={async s => { setRefSec(s); await sv('refSec:v2', s); show('Сохранено'); }} />}
-      {scr === 'qkS' && <QkSet habits={actH} quickIds={quickIds} onBack={() => go('home')} onSave={async q => { setQuick(q); await sv('quick:v3', q); show('Сохранено'); }} />}
-      {scr === 'acct' && <Acct user={user} onBack={() => go('home')} onSave={async u => { setUser(u); await sv('user', u); show('Сохранено'); }} onOut={async () => { setUser(null); await sv('user', null); }} />}
-      {scr === 'exp' && <Exp logs={logs} habits={habits} skips={skips} onBack={() => go('home')} />}
-      {scr === 'help' && <HelpScr onBack={() => go('home')} />}
-      {scr === 'feedback' && <Feedback onBack={() => go('home')} show={show} />}
-    </div>
+        {scr === 'home' && <Home {...p} onMenu={() => setMenu(true)} onH={goH}
+          onSkip={async (id, r) => { const s = { habitId: id, date: tk(), reason: r, ts: Date.now() }; if (user) await db.addSkip(user.id, s); setSk(p => [s, ...p]); show('Пропуск') }}
+          onUnplanned={async e => { const n = { ts: Date.now(), date: tk(), ...e }; setUp(p => [n, ...p]); show('Записано') }}
+          onReflect={async r => { setRef(p => { const n = p.filter(x => x.date !== r.date); return [r, ...n] }); if (user) await db.saveReflection(user.id, r) }}
+          addLog={addLogFn} qkO={qkO} setQkO={setQkO}
+          onAddIdea={async idea => {
+            const base = { id: Date.now(), date: tk(), time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }), text: idea.text, category: idea.category || '', priority: idea.priority || 'medium', done: false }
+            if (user) { const saved = await db.addIdea(user.id, base); setIdeas(p => [saved, ...p]) } else setIdeas(p => [base, ...p])
+            show('Идея ✓'); gainXp(3)
+          }} />}
+
+        {scr === 'detail' && habit && <Detail habit={habit} logs={logs} timer={tmrs[habit.id]} tick={tick} affirm={affirm} onBack={() => go('home')} addLog={addLogFn} delLog={delLog} updLog={updLog} stTmr={() => stTmr(habit.id)} spTmr={n => spTmr(habit.id, n)} cTmr={() => cTmr(habit.id)}
+          onSkip={async (id, r) => { const s = { habitId: id, date: tk(), reason: r, ts: Date.now() }; if (user) await db.addSkip(user.id, s); setSk(p => [s, ...p]); show('Пропуск') }}
+          eLTs={eLTs} setELTs={setELTs} habits={habits}
+          setHab={async h => { setHab(h); if (user) for (const hab of h) await db.saveHabit(user.id, hab) }} />}
+
+        {scr === 'allHabits' && <AllH habits={habits} onBack={() => go('home')} onH={goH}
+          onEdit={id => { setEId(id); go('editH') }}
+          onDel={async id => { const h = habits.find(x => x.id === id); if (h) setUndo(u => [{ type: 'habit', data: h }, ...u.slice(0, 19)]); if (user) await db.deleteHabit(user.id, id); setHab(p => p.filter(x => x.id !== id)); show('Удалено', () => undoAct()) }}
+          onAdd={() => { setEId(null); go('editH') }}
+          onArch={async id => { const n = habits.map(h => h.id === id ? { ...h, archived: !h.archived } : h); setHab(n); if (user) await db.saveHabit(user.id, n.find(h => h.id === id)); show('Обновлено') }} />}
+
+        {scr === 'editH' && <EditH habit={eId ? habits.find(h => h.id === eId) : null} onBack={() => go('allHabits')}
+          onSave={async h => {
+            if (eId) { const n = habits.map(x => x.id === h.id ? h : x); setHab(n) } else { const n = [...habits, { ...h, id: 'H' + Date.now(), archived: false }]; setHab(n) }
+            if (user) await db.saveHabit(user.id, h)
+            go('allHabits'); show(eId ? 'Обновлено' : 'Добавлено ✓')
+          }} />}
+
+        {scr === 'plan' && <Plan habits={actH} logs={logs} onBack={() => go('home')} />}
+        {scr === 'stats' && <Stats logs={logs} habits={actH} skips={skips} onBack={() => go('home')} />}
+        {scr === 'ach' && <Ach logs={logs} habits={actH} xp={xp} onBack={() => go('home')} />}
+        {scr === 'mot' && <Mot quotes={quotes} onBack={() => go('home')} onSave={async q => { setQ(q); await saveSetting('quotes', q); show('Сохранено') }} />}
+        {scr === 'aff' && <AffScr text={affirm} onBack={() => go('home')} onSave={async t => { setAf(t); await saveSetting('affirm', t); show('Сохранено') }} />}
+        {scr === 'ideas' && <IdeasScr ideas={ideas} onBack={() => go('home')}
+          onUpd={async i => { setIdeas(i) }}
+          onAdd={async idea => { if (user) { const s = await db.addIdea(user.id, idea); setIdeas(p => [s, ...p]) } else setIdeas(p => [idea, ...p]) }}
+          onUpdate={async (id, upd) => { if (user) await db.updateIdea(user.id, id, upd); setIdeas(p => p.map(x => x.id === id ? { ...x, ...upd } : x)) }}
+          onDelete={async id => { const idea = ideas.find(x => x.id === id); if (idea) setUndo(u => [{ type: 'idea', data: idea }, ...u.slice(0, 19)]); if (user) await db.deleteIdea(user.id, id); setIdeas(p => p.filter(x => x.id !== id)); show('Удалено', () => undoAct()) }}
+          show={show} />}
+        {scr === 'refH' && <RefHist reflections={reflections} refSections={refSections} onBack={() => go('home')}
+          onUpd={async r => { setRef(r) }}
+          onSaveSec={async s => { setRefSec(s); await saveSetting('refSections', s); show('Сохранено') }} />}
+        {scr === 'qkS' && <QkSet habits={actH} quickIds={quickIds} onBack={() => go('home')} onSave={async q => { setQuick(q); await saveSetting('quickIds', q); show('Сохранено') }} />}
+        {scr === 'acct' && <Acct user={user} onBack={() => go('home')} onOut={async () => { await db.signOut(); setUser(null) }} />}
+        {scr === 'exp' && <Exp logs={logs} habits={habits} skips={skips} onBack={() => go('home')} />}
+        {scr === 'help' && <HelpScr onBack={() => go('home')} />}
+        {scr === 'feedback' && <Feedback onBack={() => go('home')} show={show} />}
+      </div>
     </>
-  );
+  )
 }
 
-function AuthScreen({ onAuth }) {
-  const [mode, setMode] = useState('login');
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [pass, setPass] = useState('');
+function AuthScreen() {
+  const [mode, setMode] = useState('login')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [pass, setPass] = useState('')
+  const [err, setErr] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const submit = async () => {
+    if (!email || !pass) return
+    setLoading(true); setErr('')
+    try {
+      if (mode === 'login') await db.signIn(email, pass)
+      else await db.signUp(email, pass, name || email.split('@')[0])
+    } catch (e) {
+      setErr(e.message === 'Invalid login credentials' ? 'Неверный email или пароль' : e.message)
+    } finally { setLoading(false) }
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-6">
       <style>{CSS}</style>
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <div className="mb-4"><span style={{ fontFamily: "'Montserrat',sans-serif", fontWeight: 900, fontSize: 'clamp(42px,12vw,56px)', color: '#7c3aed', letterSpacing: '-2px' }}>WH</span></div>
-          <h1 className="font-bold tracking-tight" style={{ color: '#7c3aed', fontSize: 'clamp(18px,5vw,24px)' }}>WILD HABITS</h1>
+          <div className="mb-4">
+            <img src="/icon-512.png" alt="WH" className="w-20 h-20 mx-auto rounded-2xl" />
+          </div>
+          <h1 className="font-black tracking-tight" style={{ color: '#7c3aed', fontSize: 'clamp(20px,5vw,26px)' }}>WILD HABITS</h1>
           <p className="text-zinc-500 mt-1" style={{ fontSize: '12px' }}>{V} · Дикие привычки</p>
         </div>
         <div className="flex mb-6 bg-zinc-900 rounded-xl p-1">
@@ -216,13 +341,16 @@ function AuthScreen({ onAuth }) {
         </div>
         <div className="space-y-3">
           {mode === 'register' && <input value={name} onChange={e => setName(e.target.value)} placeholder="Имя" className="inp" />}
-          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" type="email" className="inp" />
-          <input value={pass} onChange={e => setPass(e.target.value)} placeholder="Пароль" type="password" className="inp" />
-          <button onClick={() => { if (email && pass) onAuth({ name: name || email.split('@')[0], email, created: tk() }); }} className="btn-primary text-white active:scale-[0.98] transition-transform" style={{ background: '#7c3aed' }}>{mode === 'login' ? 'Войти' : 'Зарегистрироваться'}</button>
+          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Email" type="email" className="inp" autoComplete="email" />
+          <input value={pass} onChange={e => setPass(e.target.value)} placeholder="Пароль (минимум 6 символов)" type="password" className="inp" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+          {err && <div className="text-rose-400 text-sm px-1">{err}</div>}
+          <button onClick={submit} disabled={loading} className="btn-primary text-white active:scale-[0.98] transition-transform disabled:opacity-50" style={{ background: '#7c3aed' }}>
+            {loading ? '...' : mode === 'login' ? 'Войти' : 'Зарегистрироваться'}
+          </button>
         </div>
       </div>
     </div>
-  );
+  )
 }
 
 function MenuOvl({ onClose, go, undo, onUndo, xp }) {
@@ -842,20 +970,19 @@ function QkSet({ habits, quickIds, onBack, onSave }) {
 }
 
 /* ============ ACCOUNT ============ */
-function Acct({ user, onBack, onSave, onOut }) {
-  const [n, setN] = useState(user.name);
+function Acct({ user, onBack, onOut }) {
   return (
     <div className="max-w-md mx-auto px-4 pb-12">
       <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">👤 Аккаунт</h1></div>
       <div className="space-y-4">
-        <Fld l="Имя"><input value={n} onChange={e => setN(e.target.value)} className="inp" /></Fld>
-        <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800"><div className="text-xs text-zinc-500 mb-1">Email</div><div className="text-zinc-300">{user.email}</div></div>
-        <div className="p-3 rounded-xl bg-zinc-900 border border-zinc-800"><div className="text-xs text-zinc-500 mb-1">С нами с</div><div className="text-zinc-300">{user.created}</div></div>
-        <button onClick={() => onSave({ ...user, name: n })} className="btn-primary bg-emerald-500 text-zinc-950 active:scale-[0.98]">Сохранить</button>
+        <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2">
+          <div><div className="text-xs text-zinc-500 mb-1">Email</div><div className="text-zinc-300">{user.email}</div></div>
+          <div><div className="text-xs text-zinc-500 mb-1">ID</div><div className="text-zinc-500 text-xs truncate">{user.id}</div></div>
+        </div>
         <button onClick={onOut} className="btn-primary bg-zinc-800 text-zinc-300 active:scale-[0.98]">Выйти</button>
       </div>
     </div>
-  );
+  )
 }
 
 /* ============ EXPORT ============ */
