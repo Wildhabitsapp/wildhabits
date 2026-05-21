@@ -12,7 +12,11 @@ const CATS = ['Здоровье','Ментальное','Работа','Отно
 const TYP = [{v:'duration',l:'Длительность'},{v:'count',l:'Счётчик'},{v:'check',l:'Галочка'},{v:'rating',l:'Оценка 1–5'},{v:'scale',l:'Число'},{v:'sleep',l:'Сон'}];
 const TOD = [{v:'morning',l:'🌅 Утро'},{v:'day',l:'☀️ День'},{v:'evening',l:'🌙 Вечер'},{v:'anytime',l:'⏳ Днём'}];
 const FRQ = [{v:'daily',l:'Каждый день'},{v:'weekly',l:'Раз/нед'},{v:'monthly',l:'Раз/мес'},{v:'custom',l:'Дни'}];
-const tk = () => new Date().toISOString().slice(0, 10);
+const tk = (d = new Date()) => {
+  // Ночной буфер: до 03:00 считаем предыдущий день
+  if (d.getHours() < 3) d.setDate(d.getDate() - 1);
+  return d.toISOString().slice(0, 10);
+};
 
 const LEVELS = [
   {name:'Новичок',min:0,icon:'🌱'},{name:'Практик',min:50,icon:'🌿'},{name:'Мастер',min:200,icon:'🌳'},
@@ -76,7 +80,7 @@ function sumH(l, h) { if (!l.length) return 0; if (h.type === 'rating' || h.type
 function sumH2(l, h) { if (!l.length) return 0; if (h.type === 'rating' || h.type === 'scale' || h.type === 'sleep') { const v = l.map(x => x.value || 0); return v.reduce((a, b) => a + b, 0) / v.length; } return l.reduce((s, x) => s + (x.value || 0), 0); }
 function fmtV(v) { if (!v && v !== 0) return '0'; if (Number.isInteger(v)) return String(v); return v.toFixed(1); }
 function fmtEl(s) { const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60; return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`; }
-function calcStr(logs, h) { if ((h.goalDay || 0) <= 0 || h.period !== 'daily') return 0; let s = 0; for (let i = 0; i < 365; i++) { const d = new Date(); d.setHours(0,0,0,0); const st = d.getTime() - i * 86400000, en = st + 86400000; const dl = logs.filter(l => l.ts >= st && l.ts < en); const v = sumH(dl, h); const ok = h.dir === 'up' ? v >= h.goalDay : v <= h.goalDay; if (ok) s++; else if (i === 0) continue; else break; } return s; }
+function calcStr(logs, h) { if (h.period !== 'daily') return 0; let s = 0; for (let i = 0; i < 365; i++) { const d = new Date(); d.setHours(0,0,0,0); const st = d.getTime() - i * 86400000, en = st + 86400000; const dl = logs.filter(l => l.ts >= st && l.ts < en); if (!dl.length) { if (i === 0) continue; else break; } const v = sumH(dl, h); const ok = h.dir === 'up' ? (h.goalDay > 0 && v >= h.goalDay) : (v > 0 && v <= (h.goalDay || 999)); if (ok) s++; else if (i === 0) continue; else break; } return s; }
 
 const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap');
@@ -175,9 +179,12 @@ export default function App() {
   }
 
   const addLogFn = async e => {
-    const l = { ts: Date.now(), ...e }
-    if (user) { const saved = await db.addLog(user.id, l); const n = [saved, ...logs]; setLogs(n) }
-    else setLogs(p => [l, ...p])
+    const l = { ts: e.ts || Date.now(), ...e }
+    if (user) {
+      const h = habits.find(x => x.id === e.habitId)
+      const saved = await db.addLog(user.id, l, h?.name || '', h?.unit || '')
+      const n = [saved, ...logs]; setLogs(n)
+    } else setLogs(p => [l, ...p])
     gainXp(5)
   }
 
@@ -299,7 +306,7 @@ export default function App() {
         {scr === 'acct' && <Acct user={user} onBack={() => go('home')} onOut={async () => { await db.signOut(); setUser(null) }} />}
         {scr === 'exp' && <Exp logs={logs} habits={habits} skips={skips} onBack={() => go('home')} />}
         {scr === 'help' && <HelpScr onBack={() => go('home')} />}
-        {scr === 'feedback' && <Feedback onBack={() => go('home')} show={show} />}
+        {scr === 'feedback' && <Feedback onBack={() => go('home')} show={show} user={user} />}
       </div>
     </>
   )
@@ -347,6 +354,7 @@ function AuthScreen() {
           <button onClick={submit} disabled={loading} className="btn-primary text-white active:scale-[0.98] transition-transform disabled:opacity-50" style={{ background: '#7c3aed' }}>
             {loading ? '...' : mode === 'login' ? 'Войти' : 'Зарегистрироваться'}
           </button>
+          {mode === 'login' && <button onClick={async () => { if (!email) { setErr('Введите email'); return; } try { await db.resetPassword(email); setErr(''); alert('Письмо отправлено! Проверьте почту.'); } catch(e) { setErr(e.message); } }} className="w-full text-center text-sm text-zinc-500 py-1 active:text-zinc-300">Забыли пароль?</button>}
         </div>
       </div>
     </div>
@@ -409,7 +417,7 @@ function CirP({ value, color, size = 56 }) { const r = size * .42, c = 2 * Math.
 /* ============ HOME ============ */
 function Home({ habits, logs, skips, tmrs, tick, quotes, quickIds, ideas, unplanned, onMenu, onH, onSkip, onUnplanned, reflections, refSections, onReflect, addLog, affirm, qkO, setQkO, onAddIdea, xp }) {
   const today = tk(); const dow = mD(); const ts0 = new Date(); ts0.setHours(0, 0, 0, 0);
-  const quote = useMemo(() => quotes[Math.floor(Math.random() * quotes.length)], []);
+  const quoteList = Array.isArray(quotes) ? quotes : (typeof quotes === 'string' ? quotes.split('\n').filter(Boolean) : []); const quote = useMemo(() => quoteList[Math.floor(Math.random() * (quoteList.length || 1))] || '', []);
   const tH = useMemo(() => habits.filter(h => {
     if (h.period === 'daily') return true;
     if (h.period === 'weekly') return (h.days || []).includes(dow) || !(h.days || []).length;
@@ -418,7 +426,7 @@ function Home({ habits, logs, skips, tmrs, tick, quotes, quickIds, ideas, unplan
     return true;
   }), [habits, dow]);
   const tL = logs.filter(l => l.ts >= ts0.getTime()); const tSk = skips.filter(s => s.date === today);
-  const grps = useMemo(() => { const g = { morning: [], day: [], evening: [], anytime: [], done: [] }; tH.forEach(h => { const hL = tL.filter(l => l.habitId === h.id); const v = sumH(hL, h); const sk = tSk.some(s => s.habitId === h.id); const isDone = sk || (h.dir === 'up' ? (h.goalDay > 0 && v >= h.goalDay) : (h.type === 'check' && v > 0)); if (isDone) g.done.push(h); else (g[h.time] || g.anytime).push(h); }); return g; }, [tH, tL, tSk]);
+  const grps = useMemo(() => { const g = { morning: [], day: [], evening: [], anytime: [], done: [] }; tH.forEach(h => { const hL = tL.filter(l => l.habitId === h.id); const v = sumH(hL, h); const sk = tSk.some(s => s.habitId === h.id); const isDone = sk || (h.type === 'sleep' ? v > 0 : h.dir === 'up' ? (h.goalDay > 0 && v >= h.goalDay) : (h.type === 'check' && v > 0)); if (isDone) g.done.push(h); else (g[h.time] || g.anytime).push(h); }); return g; }, [tH, tL, tSk]);
   const total = tH.length, done = grps.done.length, pct = total ? Math.round(done / total * 100) : 0;
   const [upN, setUpN] = useState(''); const [upM, setUpM] = useState(''); const [ideaTxt, setIdeaTxt] = useState(''); const [ideaCat, setIdeaCat] = useState(''); const [ideaPri, setIdeaPri] = useState('medium'); const [waterAmt, setWA] = useState('');
   const tR = reflections.find(r => r.date === today) || { date: today, data: {} };
@@ -427,7 +435,7 @@ function Home({ habits, logs, skips, tmrs, tick, quotes, quickIds, ideas, unplan
   const uR = (secId, idx, key, val) => {
     const d = { ...ref.data }; if (!d[secId]) d[secId] = {}; if (!d[secId][key]) d[secId][key] = [];
     const arr = [...(d[secId][key] || [])]; arr[idx] = val; d[secId] = { ...d[secId], [key]: arr };
-    const n = { ...ref, data: d }; setR(n); onReflect(n);
+    const n = { ...ref, data: d }; setR(n); onReflect(n); // сохраняем сразу
   };
   const gl = { morning: '🌅 Утро', day: '☀️ День', evening: '🌙 Вечер', anytime: '⏳ В течение дня' };
   const qI = { H02: '💧', H08: '⚡', idea: '💡', unplanned: '📋' }; const getQI = id => { if (qI[id]) return qI[id]; const h = habits.find(x => x.id === id); return h ? h.icon : '⚡'; };
@@ -451,7 +459,7 @@ function Home({ habits, logs, skips, tmrs, tick, quotes, quickIds, ideas, unplan
       {qkO === 'unplanned' && <QkPanel color="zinc" icon="📋" title="Без плана"><input value={upN} onChange={e => setUpN(e.target.value)} placeholder="Что делали?" className="inp" /><input type="number" value={upM} onChange={e => setUpM(e.target.value)} placeholder="Минут" className="inp mt-2 tabular-nums" /><button onClick={() => { if (upN) { onUnplanned({ name: upN, minutes: parseFloat(upM) || 0 }); setUpN(''); setUpM(''); setQkO(null); } }} className="w-full mt-2 p-3 rounded-xl bg-zinc-100 text-zinc-900 font-semibold active:scale-[0.98]">Записать</button></QkPanel>}
       {qkO === 'H08' && <QkPanel color="yellow" icon="⚡" title="Энергия"><div className="grid grid-cols-5 gap-2">{[1, 2, 3, 4, 5].map(n => { const c = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#10b981'][n - 1]; return <button key={n} onClick={() => { addLog({ habitId: 'H08', value: n, note: '' }); setQkO(null); }} className="aspect-square rounded-xl border-2 active:scale-95 font-bold text-xl flex items-center justify-center" style={{ borderColor: c, color: c }}>{n}</button>; })}</div></QkPanel>}
 
-      <div className="mt-2 mb-3 px-2"><p className="text-zinc-500 italic text-center leading-relaxed" style={{ fontSize: 'clamp(12px,3vw,14px)' }}>«{quote}»</p></div>
+      <div className="mt-2 mb-3 px-2"><p className="text-zinc-500 italic text-center leading-relaxed" style={{ fontSize: 'clamp(12px,3vw,14px)' }}>{quote}</p></div>
 
       <div className="mb-4 p-4 rounded-2xl bg-gradient-to-br from-zinc-900/80 to-zinc-900/30 border border-zinc-800">
         <div className="flex items-center justify-between mb-2"><span className="text-zinc-400">Прогресс</span><span className="font-bold tabular-nums">{done}/{total} · {pct}%</span></div>
@@ -502,7 +510,7 @@ function HRow({ h, logs, tmrs, onClick, done }) {
   const pct = h.goalDay > 0 && h.dir === 'up' ? Math.min(v / h.goalDay, 1) : (v > 0 ? 1 : 0);
   return (
     <button onClick={onClick} className={`w-full p-3.5 rounded-2xl bg-zinc-900/50 border border-zinc-800/60 flex items-center gap-3 active:scale-[0.98] ${ac ? 'ring-1 ring-amber-500/40' : ''}`}>
-      <div className="text-xl w-10 h-10 flex items-center justify-center rounded-xl bg-zinc-800/50">{h.icon}</div>
+      <div className="text-xl w-8 flex items-center justify-center">{h.icon}</div>
       <div className="flex-1 text-left min-w-0">
         <div className="font-semibold truncate">{h.name}</div>
         <div className="text-sm text-zinc-500 tabular-nums">{fmtV(v)} / {h.goalDay} {h.unit}</div>
@@ -517,7 +525,10 @@ function HRow({ h, logs, tmrs, onClick, done }) {
 function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, updLog, stTmr, spTmr, cTmr, onSkip, eLTs, setELTs, habits, setHab }) {
   const [note, setNote] = useState(''); const [mv, setMv] = useState(''); const [skipR, setSkipR] = useState('');
   const [showSk, setShowSk] = useState(false); const [eN, setEN] = useState(''); const [eV, setEV] = useState('');
-  const [affO, setAffO] = useState(false);
+  const [affO, setAffO] = useState(false)
+  const [showAltDate, setShowAltDate] = useState(false)
+  const [altDate, setAltDate] = useState(tk())
+  const [altTime, setAltTime] = useState('')
   const [bH, setBH] = useState('23'); const [bM, setBM] = useState('00');
   const [wH, setWH2] = useState('07'); const [wM, setWM] = useState('00');
   const [sleepQ, setSleepQ] = useState(0);
@@ -536,7 +547,15 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
   const streak = useMemo(() => calcStr(hL, h), [hL]);
   const chart = useMemo(() => { const r = []; for (let i = 6; i >= 0; i--) { const ds = now2.getTime() - i * 86400000; const dl = hL.filter(l => l.ts >= ds && l.ts < ds + 86400000); r.push({ day: new Date(ds).toLocaleDateString('ru-RU', { weekday: 'short' }), value: sumH(dl, h), isToday: i === 0 }); } return r; }, [hL]);
   const maxC = Math.max(h.goalDay || 1, ...chart.map(d => d.value), 1);
-  const qa = v => { addLog({ habitId: h.id, value: v, note }); setNote(''); setMv(''); };
+  const qa = v => {
+    let ts = Date.now()
+    if (showAltDate && altDate) {
+      const d = new Date(altDate + (altTime ? 'T' + altTime : 'T12:00'))
+      if (!isNaN(d.getTime())) ts = d.getTime()
+    }
+    addLog({ habitId: h.id, value: v, note, ts, localTime: altTime ? altDate + ' ' + altTime : undefined })
+    setNote(''); setMv(''); setShowAltDate(false); setAltDate(tk()); setAltTime('')
+  }
   const logSleep = () => { const bed = parseInt(bH) * 60 + parseInt(bM); const wk = parseInt(wH) * 60 + parseInt(wM); let d = wk - bed; if (d < 0) d += 1440; addLog({ habitId: h.id, value: Math.round(d / 60 * 10) / 10, note: `Лёг: ${bH}:${bM}, встал: ${wH}:${wM}${sleepQ > 0 ? `, качество: ${sleepQ}/5` : ''}`, sleepQuality: sleepQ }); };
 
   if (affO) return (
@@ -554,7 +573,7 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
         <span className="text-2xl">{h.icon}</span>
         <div className="flex-1 min-w-0"><h1 className="font-bold truncate">{h.name}</h1><div className="text-sm text-zinc-500">{h.cat}</div></div>
       </div>
-      {h.why && <div className="mb-3 p-3 rounded-xl bg-zinc-900/40 border border-zinc-800/50"><div className="text-xs uppercase tracking-widest text-zinc-500 mb-1">💡 Зачем</div><div className="text-sm text-zinc-300 leading-relaxed">{h.why}</div></div>}
+      {h.why && <div className="mb-3 px-1"><div className="text-sm text-zinc-500 leading-relaxed italic">{h.why}</div></div>}
 
       <div className="mb-3 p-5 rounded-2xl bg-gradient-to-br from-zinc-900/80 to-zinc-900/30 border border-zinc-800">
         <div className="flex items-center justify-between mb-3">
@@ -572,6 +591,13 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
 
       <div className="mb-3"><SH text="Записать" />
         <input value={note} onChange={e => setNote(e.target.value)} placeholder="Заметка..." className="inp mb-2" />
+        <div className="mb-2">
+          <button onClick={() => setShowAltDate(!showAltDate)} className="text-xs text-zinc-600 active:text-zinc-400">📅 Записать за другой день/время</button>
+          {showAltDate && <div className="mt-1.5 flex gap-2 flex-wrap">
+            <input type="date" value={altDate} onChange={e => setAltDate(e.target.value)} className="inp flex-1" style={{minWidth:120}} />
+            <input type="time" value={altTime} onChange={e => setAltTime(e.target.value)} className="inp" style={{width:100}} />
+          </div>}
+        </div>
 
         {h.type === 'sleep' && <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3"><div className="flex items-center gap-3"><span className="text-indigo-400">🌙</span><span className="text-zinc-400 w-14">Лёг</span><input type="number" min="0" max="23" value={bH} onChange={e => setBH(e.target.value)} className="w-16 p-2.5 rounded-lg bg-zinc-800 border border-zinc-700 outline-none text-center tabular-nums" /><span className="text-zinc-500">:</span><input type="number" min="0" max="59" value={bM} onChange={e => setBM(e.target.value)} className="w-16 p-2.5 rounded-lg bg-zinc-800 border border-zinc-700 outline-none text-center tabular-nums" /></div><div className="flex items-center gap-3"><span className="text-amber-400">☀️</span><span className="text-zinc-400 w-14">Встал</span><input type="number" min="0" max="23" value={wH} onChange={e => setWH2(e.target.value)} className="w-16 p-2.5 rounded-lg bg-zinc-800 border border-zinc-700 outline-none text-center tabular-nums" /><span className="text-zinc-500">:</span><input type="number" min="0" max="59" value={wM} onChange={e => setWM(e.target.value)} className="w-16 p-2.5 rounded-lg bg-zinc-800 border border-zinc-700 outline-none text-center tabular-nums" /></div><div><div className="text-sm text-zinc-400 mb-1.5">Качество сна</div><div className="grid grid-cols-5 gap-2">{[1,2,3,4,5].map(n => { const c = ['#ef4444','#f97316','#eab308','#84cc16','#10b981'][n-1]; return <button key={n} onClick={() => setSleepQ(n)} className={`py-2.5 rounded-lg border-2 font-bold ${sleepQ === n ? 'text-white' : ''}`} style={{ borderColor: c, color: c, background: sleepQ === n ? c + '33' : 'transparent' }}>{n}</button>; })}</div></div><button onClick={logSleep} className="btn-primary bg-indigo-500 text-white active:scale-[0.98]">Записать сон</button></div>}
 
@@ -596,9 +622,9 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
         {h.type === 'scale' && <div className="flex gap-2"><input type="number" step="0.1" value={mv} onChange={e => setMv(e.target.value)} placeholder={h.unit} className="inp flex-1 tabular-nums" /><button onClick={() => { if (mv) qa(parseFloat(mv)); }} className="px-5 rounded-xl bg-zinc-100 text-zinc-900 active:scale-95 font-semibold">💾</button></div>}
       </div>
 
-      <div className="mb-4"><button onClick={() => setShowSk(!showSk)} className="text-sm text-zinc-500 flex items-center gap-1 px-1">Не получилось сегодня?</button>{showSk && <div className="mt-2 p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2"><p className="text-sm text-zinc-400">Ничего страшного, завтра получится лучше! 💪</p><input value={skipR} onChange={e => setSkipR(e.target.value)} placeholder="Что помешало? (необязательно)" className="inp" /><div className="flex gap-2"><button onClick={() => { onSkip(h.id, skipR || 'Просто пропустил'); setSkipR(''); setShowSk(false); }} className="flex-1 p-3 rounded-xl bg-zinc-800 text-zinc-300 font-semibold active:scale-[0.98]">Пропустить</button></div></div>}</div>
+      <div className="mb-4"><button onClick={() => setShowSk(!showSk)} className="text-sm text-zinc-500 flex items-center gap-1 px-3 py-2 rounded-xl border border-zinc-700/50 active:scale-95">Не получилось сегодня?</button>{showSk && <div className="mt-2 p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2"><p className="text-sm text-zinc-400">Ничего страшного, завтра получится лучше! 💪</p><input value={skipR} onChange={e => setSkipR(e.target.value)} placeholder="Что помешало? (необязательно)" className="inp" /><div className="flex gap-2"><button onClick={() => { onSkip(h.id, skipR || 'Просто пропустил'); setSkipR(''); setShowSk(false); }} className="flex-1 p-3 rounded-xl bg-zinc-800 text-zinc-300 font-semibold active:scale-[0.98]">Пропустить</button></div></div>}</div>
 
-      <div className="mb-4 p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800"><SH text="7 дней" /><div className="flex items-end gap-1.5 h-24">{chart.map((d, i) => <div key={i} className="flex-1 flex flex-col items-center gap-1"><div className="flex-1 w-full flex items-end"><div className="w-full rounded-t-sm" style={{ height: `${(d.value / maxC) * 100}%`, minHeight: d.value > 0 ? '3px' : '0', background: d.isToday ? h.color : `${h.color}55` }} /></div><div className={`text-[10px] tabular-nums ${d.isToday ? 'text-zinc-300 font-medium' : 'text-zinc-600'}`}>{d.day}</div></div>)}</div></div>
+      <div className="mb-4 p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800"><SH text="7 дней" /><div className="flex items-end gap-1.5 h-16">{chart.map((d, i) => <div key={i} className="flex-1 flex flex-col items-center gap-1"><div className="flex-1 w-full flex items-end"><div className="w-full rounded-t-sm" style={{ height: `${(d.value / maxC) * 100}%`, minHeight: d.value > 0 ? '3px' : '0', background: d.isToday ? h.color : `${h.color}55` }} /></div><div className={`text-[10px] tabular-nums ${d.isToday ? 'text-zinc-300 font-medium' : 'text-zinc-600'}`}>{d.day}</div></div>)}</div></div>
 
       <div><div className="flex items-center justify-between mb-2"><SH text="История" /><span className="text-sm text-zinc-600 tabular-nums">{hL.length}</span></div>
         {hL.length === 0 && <div className="text-center py-6 text-zinc-600">Нет записей</div>}
@@ -751,17 +777,18 @@ function Ach({ logs, habits, xp, onBack }) {
 
 /* ============ MOTIVATION ============ */
 function Mot({ quotes, onBack, onSave }) {
-  const [nq, setNq] = useState(''); const [eIdx, setEIdx] = useState(null); const [eT, setET] = useState('');
+  const [edit, setEdit] = useState(false)
+  const text = Array.isArray(quotes) ? quotes.join('\n') : quotes
+  const [t, setT] = useState(text)
   return (
     <div className="max-w-md mx-auto px-4 pb-12">
-      <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">💬 Мотивация</h1></div>
-      <div className="flex gap-2 mb-4"><input value={nq} onChange={e => setNq(e.target.value)} placeholder="Добавьте вашу фразу…" className="inp flex-1" /><button onClick={() => { if (nq) { onSave([nq, ...quotes]); setNq(''); } }} className="px-4 rounded-xl bg-emerald-500/20 text-emerald-400 font-semibold active:scale-95">+</button></div>
-      <div className="space-y-2">{quotes.map((q, i) => <div key={i} className="p-3.5 rounded-xl bg-zinc-900/50 border border-zinc-800/40">
-        {eIdx === i ? <div className="space-y-2"><input value={eT} onChange={e => setET(e.target.value)} className="inp" /><div className="flex gap-2"><button onClick={() => { const n = [...quotes]; n[i] = eT; onSave(n); setEIdx(null); }} className="flex-1 p-2 rounded-lg bg-emerald-500/20 text-emerald-400 font-medium">OK</button><button onClick={() => setEIdx(null)} className="p-2 rounded-lg bg-zinc-800 text-zinc-400">✕</button></div></div>
-          : <div className="flex items-start gap-2"><p className="flex-1 italic text-zinc-300">«{q}»</p><button onClick={() => { setEIdx(i); setET(q); }} className="text-zinc-600 p-1 shrink-0">✏️</button><button onClick={() => onSave(quotes.filter((_, j) => j !== i))} className="text-zinc-600 p-1 shrink-0">🗑</button></div>}
-      </div>)}</div>
+      <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">💬 Мотивация</h1><button onClick={() => { if (edit) onSave(t.split('\n').filter(Boolean)); setEdit(!edit); }} className="px-4 py-2 rounded-lg bg-zinc-900 text-zinc-300 font-medium active:scale-95">{edit ? '💾' : '✏️'}</button></div>
+      {edit
+        ? <textarea value={t} onChange={e => setT(e.target.value)} rows={16} className="inp resize-none leading-relaxed" placeholder="Каждая фраза с новой строки..." />
+        : <div className="space-y-2">{(Array.isArray(quotes) ? quotes : quotes.split('\n')).filter(Boolean).map((q, i) => <p key={i} className="pl-3 border-l-2 border-violet-500/30 py-1.5 leading-relaxed text-zinc-300">{q}</p>)}</div>}
+      <p className="mt-4 text-sm text-zinc-500">Каждая фраза с новой строки. Одна случайная показывается на главном экране.</p>
     </div>
-  );
+  )
 }
 
 /* ============ AFFIRMATIONS ============ */
@@ -783,6 +810,7 @@ function IdeasScr({ ideas, onBack, onUpd, show, undo, setUndo }) {
   const [tab, setTab] = useState('active');
   const [eId, setEId] = useState(null); const [eT, setET] = useState(''); const [eC, setEC] = useState(''); const [eP, setEP] = useState('medium');
   const pI = { high: '🔴', medium: '🟡', low: '🟢' };
+  const pLong = { high: '🔴 Высокий', medium: '🟡 Средний', low: '🟢 Низкий' };
   const pL = { high: 'Высокий', medium: 'Средний', low: 'Низкий' };
 
   const addIdea = () => {
@@ -821,7 +849,7 @@ function IdeasScr({ ideas, onBack, onUpd, show, undo, setUndo }) {
         <input value={nT} onChange={e => setNT(e.target.value)} placeholder="Запишите идею..." className="inp" />
         <div className="flex gap-2">
           <input value={nC} onChange={e => setNC(e.target.value)} placeholder="Категория" className="inp flex-1" />
-          <div className="flex gap-1">{['low','medium','high'].map(p => <button key={p} onClick={() => setNP(p)} className={`w-10 h-10 rounded-lg flex items-center justify-center ${nP === p ? 'ring-2 ring-zinc-400' : ''} bg-zinc-800`}>{pI[p]}</button>)}</div>
+          <div className="flex gap-1">{['low','medium','high'].map(p => <button key={p} onClick={() => setNP(p)} className={`px-2 py-1.5 rounded-lg flex items-center gap-1 text-xs ${nP === p ? 'ring-2 ring-zinc-400 bg-zinc-700' : 'bg-zinc-800'}`}>{pI[p]}</button>)}</div>
         </div>
         <button onClick={addIdea} className="w-full p-3 rounded-xl bg-zinc-100 text-zinc-900 font-semibold active:scale-[0.98]">Записать</button>
       </div>
@@ -852,7 +880,7 @@ function IdeasScr({ ideas, onBack, onUpd, show, undo, setUndo }) {
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <span className="text-xs text-zinc-500">{idea.date} {idea.time}</span>
                     {idea.category && <span className="text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-400">{idea.category}</span>}
-                    <span className="text-xs">{pI[idea.priority]} {pL[idea.priority]}</span>
+                    <span className="text-xs text-zinc-400">{pLong[idea.priority] || pI[idea.priority]}</span>
                   </div>
                 </div>
                 <button onClick={() => { setEId(idea.id); setET(idea.text); setEC(idea.category || ''); setEP(idea.priority || 'medium'); }} className="text-zinc-600 p-1 shrink-0">✏️</button>
@@ -1034,24 +1062,30 @@ function HelpScr({ onBack }) {
 }
 
 /* ============ FEEDBACK ============ */
-function Feedback({ onBack, show }) {
-  const [theme, setTheme] = useState('Предложение');
-  const [msg, setMsg] = useState('');
-  const themes = ['Благодарность', 'Предложение', 'Ошибка'];
-  const send = () => {
-    if (!msg) return;
-    show('Спасибо за обратную связь! 💌');
-    setMsg('');
-  };
+function Feedback({ onBack, show, user }) {
+  const [theme, setTheme] = useState('Предложение')
+  const [msg, setMsg] = useState('')
+  const [email, setEmail] = useState(user?.email || '')
+  const [sending, setSending] = useState(false)
+  const themes = ['Благодарность', 'Предложение', 'Ошибка', 'Сотрудничество']
+  const send = async () => {
+    if (!msg) return
+    setSending(true)
+    const ok = await db.sendFeedback(user?.id, theme, msg, email)
+    setSending(false)
+    if (ok) { show('Спасибо за обратную связь! 💌'); setMsg(''); }
+    else show('Ошибка отправки, попробуйте позже')
+  }
   return (
     <div className="max-w-md mx-auto px-4 pb-12">
       <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">💌 Обратная связь</h1></div>
       <div className="space-y-3">
-        <Fld l="Тема"><div className="flex gap-1.5">{themes.map(t => <button key={t} onClick={() => setTheme(t)} className={`flex-1 py-2.5 rounded-lg font-medium text-sm ${theme === t ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-900 text-zinc-400'}`}>{t}</button>)}</div></Fld>
+        <Fld l="Тема"><div className="flex flex-wrap gap-1.5">{themes.map(t => <button key={t} onClick={() => setTheme(t)} className={`px-3 py-2.5 rounded-lg font-medium text-sm ${theme === t ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-900 text-zinc-400'}`}>{t}</button>)}</div></Fld>
+        <Fld l="Email для ответа"><input value={email} onChange={e => setEmail(e.target.value)} placeholder="ваш@email.com" className="inp" type="email" /></Fld>
         <Fld l="Сообщение"><textarea value={msg} onChange={e => setMsg(e.target.value)} rows={5} className="inp resize-none" placeholder="Напишите здесь..." /></Fld>
-        <button onClick={send} className="btn-primary bg-violet-500 text-white active:scale-[0.98]">Отправить</button>
-        <p className="text-sm text-zinc-500 text-center">Сообщения помогают нам делать WildHabits лучше</p>
+        <button onClick={send} disabled={sending} className="btn-primary bg-violet-500 text-white active:scale-[0.98] disabled:opacity-50">{sending ? 'Отправляем...' : 'Отправить'}</button>
+        <p className="text-sm text-zinc-500 text-center">Сообщения помогают делать WildHabits лучше</p>
       </div>
     </div>
-  );
+  )
 }
