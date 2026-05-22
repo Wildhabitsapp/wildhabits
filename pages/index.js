@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import * as db from '../lib/db'
 
 
-const V = 'v3.2';
+const V = 'v4.1';
 const S = k => `wh:${k}`;
 const DR = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 const mD = (d = new Date()) => { const v = d.getDay(); return v === 0 ? 6 : v - 1; };
@@ -260,7 +260,7 @@ export default function App() {
         {achPop && <AchPop text={achPop} />}
 
         {scr === 'home' && <Home {...p} onMenu={() => setMenu(true)} onH={goH}
-          onSkip={async (id, r) => { const s = { habitId: id, date: tk(), reason: r, ts: Date.now() }; if (user) await db.addSkip(user.id, s); setSk(p => [s, ...p]); show('Пропуск') }}
+          onSkip={async (id, r) => { const s = { habitId: id, date: tk(), reason: r, ts: Date.now() }; if (user) await db.addSkip(user.id, s); setSk(p => [s, ...p]); addLogFn({ habitId: id, value: 0, note: r || 'Пропустил', ts: Date.now(), isSkip: true }); show('Пропуск') }}
           onUnplanned={async e => { const n = { ts: Date.now(), date: tk(), ...e }; setUp(p => [n, ...p]); show('Записано') }}
           onReflect={async r => { setRef(p => { const n = p.filter(x => x.date !== r.date); return [r, ...n] }); if (user) await db.saveReflection(user.id, r) }}
           addLog={addLogFn} qkO={qkO} setQkO={setQkO}
@@ -271,7 +271,7 @@ export default function App() {
           }} />}
 
         {scr === 'detail' && habit && <Detail habit={habit} logs={logs} timer={tmrs[habit.id]} tick={tick} affirm={affirm} onBack={() => go('home')} addLog={addLogFn} delLog={delLog} updLog={updLog} stTmr={() => stTmr(habit.id)} spTmr={n => spTmr(habit.id, n)} cTmr={() => cTmr(habit.id)}
-          onSkip={async (id, r) => { const s = { habitId: id, date: tk(), reason: r, ts: Date.now() }; if (user) await db.addSkip(user.id, s); setSk(p => [s, ...p]); show('Пропуск') }}
+          onSkip={async (id, r) => { const s = { habitId: id, date: tk(), reason: r, ts: Date.now() }; if (user) await db.addSkip(user.id, s); setSk(p => [s, ...p]); addLogFn({ habitId: id, value: 0, note: r || 'Пропустил', ts: Date.now(), isSkip: true }); show('Пропуск') }}
           eLTs={eLTs} setELTs={setELTs} habits={habits}
           setHab={async h => { setHab(h); if (user) for (const hab of h) await db.saveHabit(user.id, hab) }} />}
 
@@ -305,6 +305,8 @@ export default function App() {
         {scr === 'qkS' && <QkSet habits={actH} quickIds={quickIds} onBack={() => go('home')} onSave={async q => { setQuick(q); await saveSetting('quickIds', q); show('Сохранено') }} />}
         {scr === 'acct' && <Acct user={user} onBack={() => go('home')} onOut={async () => { await db.signOut(); setUser(null) }} />}
         {scr === 'exp' && <Exp logs={logs} habits={habits} skips={skips} onBack={() => go('home')} />}
+        {scr === 'history' && <HistoryScr logs={logs} habits={actH} skips={skips} onBack={() => go('home')} />}
+        {scr === 'events' && <EventsScr onBack={() => go('home')} user={user} show={show} />}
         {scr === 'help' && <HelpScr onBack={() => go('home')} />}
         {scr === 'feedback' && <Feedback onBack={() => go('home')} show={show} user={user} />}
       </div>
@@ -337,7 +339,7 @@ function AuthScreen() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <div className="mb-4">
-            <img src="/icon-512.png" alt="WH" className="w-20 h-20 mx-auto rounded-2xl" />
+            <img src="/logo.png" alt="WH" className="h-16 w-auto mx-auto" />
           </div>
           <h1 className="font-black tracking-tight" style={{ color: '#7c3aed', fontSize: 'clamp(20px,5vw,26px)' }}>WILD HABITS</h1>
           <p className="text-zinc-500 mt-1" style={{ fontSize: '12px' }}>{V} · Дикие привычки</p>
@@ -363,35 +365,59 @@ function AuthScreen() {
 
 function MenuOvl({ onClose, go, undo, onUndo, xp }) {
   const lv = getLevel(xp);
-  const items = [
-    { i: '🏠', l: 'Привычки дня', s: 'home' },
-    { i: '📋', l: 'Все привычки', s: 'allHabits' },
-    { i: '📅', l: 'План', s: 'plan' },
-    { i: '📊', l: 'Статистика', s: 'stats' },
-    { i: '🏆', l: 'Ачивки', s: 'ach' },
-    { i: '💬', l: 'Мотивация', s: 'mot' },
-    { i: '🌟', l: 'Аффирмации', s: 'aff' },
-    { i: '💡', l: 'Идеи', s: 'ideas' },
-    { i: '📝', l: 'Рефлексия', s: 'refH' },
-    { i: '⚡', l: 'Быстрые записи', s: 'qkS' },
-    { i: '❓', l: 'Как пользоваться', s: 'help' },
-    { i: '💌', l: 'Обратная связь', s: 'feedback' },
-    { i: '👤', l: 'Аккаунт', s: 'acct' },
-    { i: '📤', l: 'Экспорт', s: 'exp' },
+  const groups = [
+    { title: '📋 Главное', items: [
+      { i: '🏠', l: 'Привычки дня', s: 'home' },
+      { i: '📋', l: 'Все привычки', s: 'allHabits' },
+      { i: '📅', l: 'План', s: 'plan' },
+      { i: '⚡', l: 'Быстрые записи', s: 'qkS' },
+    ]},
+    { title: '📊 Аналитика', items: [
+      { i: '📊', l: 'Статистика', s: 'stats' },
+      { i: '🏆', l: 'Ачивки', s: 'ach' },
+      { i: '📚', l: 'Вся история', s: 'history' },
+      { i: '📤', l: 'Экспорт', s: 'exp' },
+    ]},
+    { title: '✨ Личное', items: [
+      { i: '💡', l: 'Идеи', s: 'ideas' },
+      { i: '📅', l: 'События', s: 'events' },
+      { i: '📝', l: 'Рефлексия', s: 'refH' },
+    ]},
+    { title: '🧘 Практики', items: [
+      { i: '💬', l: 'Мотивация', s: 'mot' },
+      { i: '🌟', l: 'Аффирмации', s: 'aff' },
+    ]},
+    { title: '⚙️ Настройки', items: [
+      { i: '👤', l: 'Аккаунт', s: 'acct' },
+      { i: '❓', l: 'О приложении', s: 'help' },
+      { i: '💌', l: 'Обратная связь', s: 'feedback' },
+    ]},
   ];
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm" onClick={onClose}>
       <div className="absolute left-0 top-0 bottom-0 w-72 bg-zinc-900 border-r border-zinc-800 p-5 overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-4">
-          <div><span style={{ fontWeight: 900, fontSize: 24, color: '#7c3aed' }}>WH</span><span className="text-sm font-bold ml-2" style={{ color: '#7c3aed' }}>WILD HABITS</span><div className="text-[10px] text-zinc-500">{V}</div></div>
+          <div><img src='/logo.png' alt='WH' className='h-7 w-auto mb-0.5' /><div className="text-[10px] text-zinc-500 mt-0.5">{V}</div></div>
           <button onClick={onClose} className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center">✕</button>
         </div>
         <div className="mb-4 p-3 rounded-xl bg-zinc-800/50 border border-zinc-700/50">
           <div className="flex items-center gap-2"><span className="text-xl">{lv.icon}</span><div><div className="font-bold text-sm">{lv.name}</div><div className="text-xs text-zinc-400">{xp} XP{lv.next ? ` · до ${lv.next.name}: ${lv.next.min - xp}` : ''}</div></div></div>
           {lv.next && <div className="mt-2 h-1.5 rounded-full bg-zinc-700 overflow-hidden"><div className="h-full rounded-full bg-violet-500 transition-all" style={{ width: `${((xp - lv.min) / (lv.next.min - lv.min)) * 100}%` }} /></div>}
         </div>
-        <div className="space-y-0.5">
-          {items.map(it => (<button key={it.l} onClick={() => go(it.s)} className="w-full p-3 rounded-xl flex items-center gap-3 active:bg-zinc-800 text-left"><span className="text-lg">{it.i}</span><span className="font-medium">{it.l}</span></button>))}
+        <div className="space-y-3">
+          {groups.map(g => (
+            <div key={g.title}>
+              <div className="text-[10px] uppercase tracking-widest text-zinc-600 px-2 mb-0.5 font-bold">{g.title}</div>
+              <div className="space-y-0.5">
+                {g.items.map(it => (
+                  <button key={it.l} onClick={() => go(it.s)} className="w-full p-2.5 rounded-xl flex items-center gap-3 active:bg-zinc-800 text-left">
+                    <span className="text-base">{it.i}</span>
+                    <span className="font-medium text-sm">{it.l}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
         {undo.length > 0 && <button onClick={onUndo} className="w-full mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-amber-400 font-medium"><span>↩</span> Отменить</button>}
         <div className="mt-4 p-3 rounded-xl bg-violet-500/5 border border-violet-500/20"><div className="font-semibold text-violet-400 mb-1">🚀 Pro</div><div className="text-xs text-zinc-500">ИИ аналитика, Telegram-бот, авто-экспорт. Скоро!</div></div>
@@ -431,12 +457,17 @@ function Home({ habits, logs, skips, tmrs, tick, quotes, quickIds, ideas, unplan
   const [upN, setUpN] = useState(''); const [upM, setUpM] = useState(''); const [ideaTxt, setIdeaTxt] = useState(''); const [ideaCat, setIdeaCat] = useState(''); const [ideaPri, setIdeaPri] = useState('medium'); const [waterAmt, setWA] = useState('');
   const tR = reflections.find(r => r.date === today) || { date: today, data: {} };
   const [ref, setR] = useState(tR);
-  useEffect(() => { setR(reflections.find(r => r.date === today) || { date: today, data: {} }); }, [reflections, today]);
+  useEffect(() => { setR(reflections.find(r => r.date === today) || { date: today, data: {} }); }, [today]);
+  // Автосохранение с задержкой 800мс
+  const refTimer = useRef(null)
   const uR = (secId, idx, key, val) => {
     const d = { ...ref.data }; if (!d[secId]) d[secId] = {}; if (!d[secId][key]) d[secId][key] = [];
     const arr = [...(d[secId][key] || [])]; arr[idx] = val; d[secId] = { ...d[secId], [key]: arr };
-    const n = { ...ref, data: d }; setR(n); onReflect(n); // сохраняем сразу
+    const n = { ...ref, data: d }; setR(n);
+    clearTimeout(refTimer.current);
+    refTimer.current = setTimeout(() => onReflect(n), 800);
   };
+
   const gl = { morning: '🌅 Утро', day: '☀️ День', evening: '🌙 Вечер', anytime: '⏳ В течение дня' };
   const qI = { H02: '💧', H08: '⚡', idea: '💡', unplanned: '📋' }; const getQI = id => { if (qI[id]) return qI[id]; const h = habits.find(x => x.id === id); return h ? h.icon : '⚡'; };
   const pIcons = { high: '🔴', medium: '🟡', low: '🟢' };
@@ -445,7 +476,7 @@ function Home({ habits, logs, skips, tmrs, tick, quotes, quickIds, ideas, unplan
     <div className="max-w-md mx-auto px-4 pb-24">
       <div className="pt-5 pb-2 flex items-center gap-3">
         <button onClick={onMenu} className="w-12 h-12 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95 shrink-0 text-lg">☰</button>
-        <span style={{ fontWeight: 900, fontSize: 'clamp(22px,6vw,28px)', color: '#7c3aed', letterSpacing: '-1px' }} className="shrink-0">WH</span>
+        <img src='/logo.png' alt='WH' className='h-8 w-auto shrink-0' />
         <div className="flex-1 min-w-0"><div className="font-bold leading-tight" style={{ fontSize: 'clamp(14px,3.5vw,16px)' }}>{new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
         <div className="grid grid-cols-2 gap-1 shrink-0">
           {quickIds.slice(0, 4).map((qid, qi) => (
@@ -807,6 +838,9 @@ function AffScr({ text, onBack, onSave }) {
 /* ============ IDEAS (с редактированием, отменой удаления, вкладкой Сделано) ============ */
 function IdeasScr({ ideas, onBack, onUpd, show, undo, setUndo }) {
   const [nT, setNT] = useState(''); const [nC, setNC] = useState(''); const [nP, setNP] = useState('medium');
+  const [cats, setCats] = useState(() => { try { return JSON.parse(localStorage.getItem('wh:ideaCats') || '["Работа","Личное","Творчество","Здоровье"]') } catch { return ["Работа","Личное","Творчество","Здоровье"] } })
+  const [newCat, setNewCat] = useState('')
+  const saveCats = (c) => { setCats(c); localStorage.setItem('wh:ideaCats', JSON.stringify(c)) }
   const [tab, setTab] = useState('active');
   const [eId, setEId] = useState(null); const [eT, setET] = useState(''); const [eC, setEC] = useState(''); const [eP, setEP] = useState('medium');
   const pI = { high: '🔴', medium: '🟡', low: '🟢' };
@@ -848,7 +882,13 @@ function IdeasScr({ ideas, onBack, onUpd, show, undo, setUndo }) {
       <div className="mb-3 space-y-2">
         <input value={nT} onChange={e => setNT(e.target.value)} placeholder="Запишите идею..." className="inp" />
         <div className="flex gap-2">
-          <input value={nC} onChange={e => setNC(e.target.value)} placeholder="Категория" className="inp flex-1" />
+          <div className="flex gap-1.5 flex-wrap mb-1">
+          {cats.map(c => <button key={c} onClick={() => setNC(c === nC ? '' : c)} className={`px-3 py-1.5 rounded-lg text-sm font-medium ${nC === c ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'bg-zinc-800 text-zinc-400'}`}>{c}</button>)}
+        </div>
+        <div className="flex gap-2">
+          <input value={newCat} onChange={e => setNewCat(e.target.value)} placeholder="+ Новая категория" className="inp flex-1 text-sm" />
+          {newCat && <button onClick={() => { if (newCat && !cats.includes(newCat)) { saveCats([...cats, newCat]); setNC(newCat); } setNewCat(''); }} className="px-3 rounded-xl bg-zinc-700 text-zinc-300 active:scale-95">OK</button>}
+        </div>
           <div className="flex gap-1">{['low','medium','high'].map(p => <button key={p} onClick={() => setNP(p)} className={`px-2 py-1.5 rounded-lg flex items-center gap-1 text-xs ${nP === p ? 'ring-2 ring-zinc-400 bg-zinc-700' : 'bg-zinc-800'}`}>{pI[p]}</button>)}</div>
         </div>
         <button onClick={addIdea} className="w-full p-3 rounded-xl bg-zinc-100 text-zinc-900 font-semibold active:scale-[0.98]">Записать</button>
@@ -1043,22 +1083,178 @@ function Exp({ logs, habits, skips, onBack }) {
 /* ============ HELP ============ */
 function HelpScr({ onBack }) {
   const sections = [
-    { icon: '🏠', title: 'Привычки дня', desc: 'Главный экран — привычки на сегодня, сгруппированные по времени. Нажмите на привычку для записи.' },
-    { icon: '📋', title: 'Все привычки', desc: 'Полный список. Добавляйте, редактируйте, архивируйте. Создавайте свои привычки.' },
-    { icon: '⚡', title: 'Быстрые записи', desc: '4 кнопки в правом верхнем углу — запись в 1 нажатие без перехода на экран привычки.' },
-    { icon: '📅', title: 'План', desc: 'Календарь месяца. Цветные точки показывают запланированные привычки на каждый день.' },
-    { icon: '📊', title: 'Статистика', desc: 'Графики, heatmap, фильтры по периоду и привычке.' },
-    { icon: '🏆', title: 'Ачивки и уровни', desc: 'Система XP: записи дают опыт, открывают уровни от Новичка до Легенды.' },
-    { icon: '💡', title: 'Идеи', desc: 'Записывайте идеи с категориями и приоритетами. Отмечайте реализованные.' },
-    { icon: '📝', title: 'Рефлексия', desc: 'Задачи дня, благодарности, достижения. Настройте свои секции.' },
-    { icon: '📤', title: 'Экспорт', desc: 'CSV для Google Sheets или Excel.' },
+    { icon: '🏠', title: 'Привычки дня', desc: 'Главный экран — все ваши привычки на сегодня, сгруппированные по времени дня: утро, день, вечер. Нажмите на любую привычку чтобы открыть её и сделать запись. Выполненные привычки уходят вниз в раздел «Сделано».' },
+    { icon: '📋', title: 'Все привычки', desc: 'Полный список всех привычек. Нажмите «+» чтобы добавить новую. Свайпните или нажмите иконку карандаша для редактирования. Можно архивировать привычку — она исчезнет с главного экрана но данные сохранятся.' },
+    { icon: '⚡', title: 'Быстрые записи', desc: '4 кнопки в правом верхнем углу главного экрана — запись самых частых привычек в одно нажатие. Настройте какие привычки там показывать в разделе «Быстрые записи» в меню.' },
+    { icon: '📅', title: 'План', desc: 'Календарь месяца. Цветные точки под датой показывают запланированные привычки. Нажмите на день чтобы увидеть список привычек на этот день.' },
+    { icon: '📊', title: 'Статистика', desc: 'Графики и тепловая карта выполнения привычек. Выбирайте период: неделя, месяц, квартал, год. Фильтруйте по конкретной привычке чтобы видеть детальный график.' },
+    { icon: '🏆', title: 'Ачивки и уровни', desc: 'Каждая запись даёт вам XP (опыт). Накапливайте XP и поднимайтесь по уровням: Новичок → Практик → Мастер → Гуру → Легенда. Серии без пропусков дают дополнительные достижения.' },
+    { icon: '💡', title: 'Идеи', desc: 'Записывайте идеи которые приходят в голову. Добавляйте категорию и приоритет (высокий, средний, низкий). Когда идея реализована — отметьте галочкой, она перейдёт во вкладку «Сделано».' },
+    { icon: '📅', title: 'События', desc: 'Отслеживайте важные даты — сколько времени прошло или осталось. Разовые события (путешествия, достижения) и повторяющиеся ежегодно (дни рождения, годовщины).' },
+    { icon: '📝', title: 'Рефлексия', desc: 'Ежедневная рефлексия на главном экране: задачи дня с отметкой выполнено/не выполнено, благодарности, достижения. Настройте свои секции в разделе Рефлексия → Настройки.' },
+    { icon: '💬', title: 'Мотивация и Аффирмации', desc: 'Мотивация — список вдохновляющих фраз, одна случайная показывается на главном экране. Аффирмации — утренние утверждения, читайте их вслух каждое утро.' },
+    { icon: '📤', title: 'Экспорт', desc: 'Скачайте все ваши данные в формате CSV. Откройте в Google Sheets или Excel для анализа.' },
+    { icon: '🔒', title: 'Ваши данные', desc: 'Все данные хранятся в защищённом облаке и не пропадут. Можете зайти с любого устройства через браузер.' },
   ];
   return (
     <div className="max-w-md mx-auto px-4 pb-12">
-      <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">❓ Как пользоваться</h1></div>
-      <div className="space-y-2">{sections.map((s, i) => <div key={i} className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800"><div className="flex items-center gap-2 mb-1"><span className="text-lg">{s.icon}</span><span className="font-semibold">{s.title}</span></div><p className="text-sm text-zinc-400 leading-relaxed">{s.desc}</p></div>)}</div>
+      <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">❓ О приложении</h1></div>
+      <div className="mb-4 p-4 rounded-2xl bg-violet-500/10 border border-violet-500/20 text-center">
+        <img src="/logo.png" alt="WH" className="h-10 w-auto mx-auto mb-2" />
+        <div className="font-bold text-violet-400">WildHabits {V}</div>
+        <div className="text-sm text-zinc-400 mt-1">Трекер привычек для осознанной жизни</div>
+      </div>
+      <div className="space-y-2 mb-6">{sections.map((s, i) => <div key={i} className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800"><div className="flex items-center gap-2 mb-1"><span className="text-lg">{s.icon}</span><span className="font-semibold">{s.title}</span></div><p className="text-sm text-zinc-400 leading-relaxed">{s.desc}</p></div>)}</div>
+      <div className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 text-center">
+        <div className="text-sm text-zinc-500">Создатель приложения</div>
+        <div className="font-semibold mt-1">Колесников Дмитрий</div>
+        <a href="https://diko.pro" target="_blank" rel="noopener noreferrer" className="text-violet-400 text-sm">diko.pro</a>
+      </div>
     </div>
-  );
+  )
+}
+
+
+
+/* ============ СОБЫТИЯ ============ */
+function EventsScr({ onBack, user, show }) {
+  const [events, setEvents] = useState([])
+  const [form, setForm] = useState({ name: '', icon: '📅', date: '', time: '00:00', repeats: false })
+  const [adding, setAdding] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!user) return
+    supabase.from('events').select('*').eq('user_id', user.id).order('date').then(({ data }) => {
+      setEvents(data || [])
+      setLoading(false)
+    })
+  }, [user])
+
+  const calcDiff = (ev) => {
+    const now = new Date()
+    let target = new Date(ev.date + 'T' + (ev.time || '00:00'))
+    if (ev.repeats_yearly) {
+      target.setFullYear(now.getFullYear())
+      if (target < now) target.setFullYear(now.getFullYear() + 1)
+    }
+    const diff = target - now
+    const isPast = diff < 0
+    const abs = Math.abs(diff)
+    const days = Math.floor(abs / 86400000)
+    const years = Math.floor(days / 365)
+    const months = Math.floor((days % 365) / 30)
+    const remDays = days % 30
+    const parts = []
+    if (years > 0) parts.push(`${years} ${years === 1 ? 'год' : years < 5 ? 'года' : 'лет'}`)
+    if (months > 0) parts.push(`${months} мес`)
+    if (remDays > 0 || parts.length === 0) parts.push(`${remDays} дн`)
+    return { text: parts.join(' '), isPast }
+  }
+
+  const save = async () => {
+    if (!form.name || !form.date) return
+    const { data } = await supabase.from('events').insert({ user_id: user.id, name: form.name, icon: form.icon, date: form.date, time: form.time, repeats_yearly: form.repeats }).select().single()
+    if (data) { setEvents(p => [...p, data]); setForm({ name: '', icon: '📅', date: '', time: '00:00', repeats: false }); setAdding(false); show('Событие добавлено ✓') }
+  }
+
+  const del = async (id) => {
+    await supabase.from('events').delete().eq('id', id)
+    setEvents(p => p.filter(e => e.id !== id))
+    show('Удалено')
+  }
+
+  return (
+    <div className="max-w-md mx-auto px-4 pb-12">
+      <div className="pt-5 pb-3 flex items-center gap-3">
+        <button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button>
+        <h1 className="font-bold flex-1">📅 События</h1>
+        <button onClick={() => setAdding(!adding)} className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xl active:scale-95">+</button>
+      </div>
+
+      {adding && <div className="mb-4 p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3">
+        <div className="flex gap-2">
+          <input value={form.icon} onChange={e => setForm(f => ({...f, icon: e.target.value}))} className="inp w-16 text-center text-2xl" maxLength={4} />
+          <input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} placeholder="Название события" className="inp flex-1" />
+        </div>
+        <div className="flex gap-2">
+          <input type="date" value={form.date} onChange={e => setForm(f => ({...f, date: e.target.value}))} className="inp flex-1" />
+          <input type="time" value={form.time} onChange={e => setForm(f => ({...f, time: e.target.value}))} className="inp" style={{width:100}} />
+        </div>
+        <button onClick={() => setForm(f => ({...f, repeats: !f.repeats}))} className={`w-full p-3 rounded-xl border text-sm font-medium ${form.repeats ? 'bg-violet-500/10 border-violet-500/30 text-violet-400' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}>
+          🔄 Повторяется каждый год (день рождения, годовщина)
+        </button>
+        <button onClick={save} className="btn-primary bg-emerald-500 text-zinc-950 active:scale-[0.98]">Сохранить</button>
+      </div>}
+
+      {loading && <div className="text-center py-8 text-zinc-500">Загрузка...</div>}
+      {!loading && events.length === 0 && <div className="text-center py-8 text-zinc-500">Добавьте первое событие — свадьба, бросил курить, день рождения...</div>}
+      <div className="space-y-2">
+        {events.map(ev => {
+          const { text, isPast } = calcDiff(ev)
+          return <div key={ev.id} className="p-4 rounded-2xl border border-zinc-800" style={{background: 'linear-gradient(135deg, #3730a320 0%, #1e1b4b20 100%)'}}>
+            <div className="flex items-start justify-between">
+              <div>
+                <div className="font-bold flex items-center gap-2">{ev.icon} {ev.name}{ev.repeats_yearly && <span className="text-[10px] text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded-full">ежегодно</span>}</div>
+                <div className="text-xs text-zinc-500 mt-0.5">{new Date(ev.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+              </div>
+              <button onClick={() => del(ev.id)} className="text-zinc-600 p-1">🗑</button>
+            </div>
+            <div className="mt-2">
+              <span className="text-2xl font-bold" style={{color: isPast ? '#10b981' : '#f59e0b'}}>{text}</span>
+              <span className="text-zinc-500 ml-2 text-sm">{isPast ? 'прошло' : 'осталось'}</span>
+            </div>
+          </div>
+        })}
+      </div>
+    </div>
+  )
+}
+
+/* ============ ВСЯ ИСТОРИЯ ============ */
+function HistoryScr({ logs, habits, skips, onBack }) {
+  const days = 7
+  const now = new Date(); now.setHours(0,0,0,0)
+  const allDays = Array.from({ length: days }, (_, i) => {
+    const d = new Date(now.getTime() - i * 86400000)
+    return { date: d.toISOString().slice(0,10), label: i === 0 ? 'Сегодня' : i === 1 ? 'Вчера' : d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'short' }) }
+  })
+  return (
+    <div className="max-w-md mx-auto px-4 pb-12">
+      <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">📚 Вся история</h1></div>
+      {allDays.map(({ date, label }) => {
+        const dayLogs = logs.filter(l => new Date(l.ts).toISOString().slice(0,10) === date && !l.isSkip)
+        const daySkips = skips.filter(s => s.date === date)
+        if (!dayLogs.length && !daySkips.length) return null
+        return (
+          <div key={date} className="mb-4">
+            <SH text={label} />
+            <div className="space-y-1.5">
+              {dayLogs.map(l => {
+                const h = habits.find(x => x.id === l.habitId)
+                return <div key={l.ts} className="p-3 rounded-xl bg-zinc-900/50 border border-zinc-800/40 flex items-center gap-3">
+                  <span className="text-lg">{h?.icon || '📌'}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm">{l.habitName || h?.name || l.habitId}</div>
+                    <div className="text-xs text-zinc-500 tabular-nums">{fmtV(l.value)} {l.habitUnit || h?.unit || ''}{l.note ? ` · ${l.note}` : ''}</div>
+                  </div>
+                  <div className="text-xs text-zinc-600">{new Date(l.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</div>
+                </div>
+              })}
+              {daySkips.map(s => {
+                const h = habits.find(x => x.id === s.habitId)
+                return <div key={s.ts || s.id} className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/15 flex items-center gap-3">
+                  <span className="text-lg">{h?.icon || '❌'}</span>
+                  <div className="flex-1"><div className="font-medium text-sm text-rose-400">{h?.name} — пропуск</div>{s.reason && <div className="text-xs text-zinc-500">{s.reason}</div>}</div>
+                </div>
+              })}
+            </div>
+          </div>
+        )
+      })}
+      {logs.length === 0 && <div className="text-center py-8 text-zinc-500">Записей пока нет</div>}
+    </div>
+  )
 }
 
 /* ============ FEEDBACK ============ */
