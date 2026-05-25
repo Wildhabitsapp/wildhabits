@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import * as db from '../lib/db'
 
 
-const V = 'v4.4';
+const V = 'v4.5';
 const S = k => `wh:${k}`;
 const DR = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 const mD = (d = new Date()) => { const v = d.getDay(); return v === 0 ? 6 : v - 1; };
@@ -91,28 +91,22 @@ const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap');
 * { font-family: 'Montserrat', system-ui, sans-serif; box-sizing: border-box; }
 body { font-size: clamp(15px, 4vw, 17px); }
-body.theme-light { background: #f5f5f7 !important; color: #1c1c1e !important; }
-body.theme-light .min-h-screen { background: #f5f5f7 !important; }
-body.theme-light .bg-zinc-950 { background: #f5f5f7 !important; }
-body.theme-light .bg-zinc-900 { background: #ffffff !important; border-color: #e5e7eb !important; }
-body.theme-light .bg-zinc-900\/50 { background: rgba(255,255,255,0.9) !important; }
-body.theme-light .bg-zinc-900\/40 { background: rgba(255,255,255,0.8) !important; }
-body.theme-light .bg-zinc-900\/30 { background: rgba(255,255,255,0.6) !important; }
-body.theme-light .bg-zinc-800 { background: #f0f0f5 !important; }
-body.theme-light .bg-zinc-800\/50 { background: rgba(240,240,245,0.8) !important; }
-body.theme-light .bg-zinc-800\/30 { background: rgba(240,240,245,0.6) !important; }
-body.theme-light .border-zinc-800 { border-color: #ddd !important; }
-body.theme-light .border-zinc-800\/60 { border-color: rgba(200,200,200,0.8) !important; }
-body.theme-light .border-zinc-800\/40 { border-color: rgba(200,200,200,0.6) !important; }
-body.theme-light .border-zinc-700 { border-color: #ccc !important; }
-body.theme-light .text-zinc-100 { color: #1c1c1e !important; }
-body.theme-light .text-zinc-300 { color: #3a3a3c !important; }
-body.theme-light .text-zinc-400 { color: #636366 !important; }
-body.theme-light .text-zinc-500 { color: #8e8e93 !important; }
-body.theme-light .text-zinc-600 { color: #aeaeb2 !important; }
-body.theme-light .inp { background: #ffffff !important; border-color: #ddd !important; color: #1c1c1e !important; }
-body.theme-light .inp::placeholder { color: #aeaeb2 !important; }
-body.theme-light select option { background: #ffffff; color: #1c1c1e; }
+body.theme-light { background: #f2f2f7 !important; color: #000000 !important; }
+body.theme-light .min-h-screen { background: #f2f2f7 !important; }
+body.theme-light .bg-zinc-950 { background: #f2f2f7 !important; }
+body.theme-light .bg-zinc-900, body.theme-light .bg-zinc-900\/50, body.theme-light .bg-zinc-900\/40, body.theme-light .bg-zinc-900\/30, body.theme-light .bg-zinc-900\/80 { background: #ffffff !important; }
+body.theme-light .bg-zinc-800, body.theme-light .bg-zinc-800\/50, body.theme-light .bg-zinc-800\/30 { background: #e8e8ed !important; }
+body.theme-light .border-zinc-800, body.theme-light .border-zinc-800\/60, body.theme-light .border-zinc-800\/40, body.theme-light .border-zinc-700 { border-color: #c7c7cc !important; }
+body.theme-light .text-zinc-100 { color: #000000 !important; }
+body.theme-light .text-zinc-300 { color: #1c1c1e !important; }
+body.theme-light .text-zinc-400 { color: #3a3a3c !important; }
+body.theme-light .text-zinc-500 { color: #48484a !important; }
+body.theme-light .text-zinc-600 { color: #636366 !important; }
+body.theme-light .text-zinc-700 { color: #8e8e93 !important; }
+body.theme-light .inp { background: #ffffff !important; border-color: #c7c7cc !important; color: #000000 !important; box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; }
+body.theme-light .inp::placeholder { color: #8e8e93 !important; font-style: italic; }
+body.theme-light select option { background: #ffffff; color: #000000; }
+body.theme-light .bg-black\/80 { background: rgba(0,0,0,0.6) !important; }
 .inp { width: 100%; padding: 12px 16px; border-radius: 14px; background: #18181b; border: 1px solid #27272a; outline: none; font-size: clamp(15px, 4vw, 17px); color: #fafafa; }
 .inp:focus { border-color: #3f3f46; }
 .btn-primary { width: 100%; padding: 16px; border-radius: 16px; font-weight: 700; font-size: clamp(15px, 4vw, 17px); display: flex; align-items: center; justify-content: center; gap: 8px; }
@@ -424,21 +418,21 @@ function AuthScreen() {
 
 
 function AccordionMenu({ groups, go }) {
-  const [open, setOpen] = useState(null)
+  const [open, setOpen] = useState(0)
   return (
-    <div className="space-y-1">
+    <div className="space-y-0.5">
       {groups.map((g, gi) => (
         <div key={g.title}>
-          <button onClick={() => setOpen(open === gi ? null : gi)} className="w-full px-2 py-2.5 flex items-center justify-between active:bg-zinc-800/50 rounded-xl">
-            <span className="text-sm font-bold text-zinc-400">{g.title}</span>
-            <span className="text-zinc-600 text-xs">{open === gi ? '▲' : '▼'}</span>
+          <button onClick={() => setOpen(open === gi ? null : gi)} className="w-full px-3 py-3 flex items-center justify-between active:bg-zinc-800/50 rounded-xl">
+            <span className="text-base font-black tracking-tight">{g.title}</span>
+            <span className="text-zinc-500 text-sm">{open === gi ? '▲' : '▼'}</span>
           </button>
           {open === gi && (
-            <div className="space-y-0.5 ml-2">
+            <div className="space-y-0.5 pl-2 pb-1">
               {g.items.map(it => (
-                <button key={it.l} onClick={() => go(it.s)} className="w-full p-3 rounded-xl flex items-center gap-3 active:bg-zinc-800 text-left">
-                  <span className="text-lg">{it.i}</span>
-                  <span className="font-semibold text-base">{it.l}</span>
+                <button key={it.l} onClick={() => go(it.s)} className="w-full px-3 py-2.5 rounded-xl flex items-center gap-3 active:bg-zinc-800 text-left">
+                  <span className="text-base">{it.i}</span>
+                  <span className="font-medium text-sm text-zinc-300">{it.l}</span>
                 </button>
               ))}
             </div>
@@ -486,7 +480,7 @@ function MenuOvl({ onClose, go, undo, onUndo, xp, avatar, userName }) {
             <div className="w-10 h-10 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-xl overflow-hidden">
               {avatar ? <img src={avatar} alt="avatar" className="w-full h-full object-cover" /> : '👤'}
             </div>
-            <div><div className="font-semibold text-sm">{userName || 'Профиль'}</div><div className="text-xs text-zinc-500">Аккаунт</div></div>
+            <div className="font-semibold text-sm">{userName || 'Профиль'}</div>
           </div>
           <button onClick={onClose} className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center">✕</button>
         </div>
@@ -733,7 +727,18 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
   const tPct = h.dir === 'up' ? (h.goalDay > 0 ? Math.min(tV / h.goalDay, 1) : 0) : (tV <= (h.goalDay || 0) ? 1 : 0);
   const elapsed = timer ? Math.floor((Date.now() - timer) / 1000) : 0;
   const streak = useMemo(() => calcStr(hL, h), [hL]);
-  const chart = useMemo(() => { const r = []; for (let i = 6; i >= 0; i--) { const ds = now2.getTime() - i * 86400000; const dl = hL.filter(l => l.ts >= ds && l.ts < ds + 86400000); r.push({ day: new Date(ds).toLocaleDateString('ru-RU', { weekday: 'short' }), value: sumH(dl, h), isToday: i === 0 }); } return r; }, [hL]);
+  const chart = useMemo(() => {
+    const r = []
+    const base = new Date(); base.setHours(0,0,0,0)
+    for (let i = 6; i >= 0; i--) {
+      const ds = base.getTime() - i * 86400000
+      const de = ds + 86400000
+      const dl = hL.filter(l => l.ts >= ds && l.ts < de)
+      const val = sumH(dl, h)
+      r.push({ day: new Date(ds).toLocaleDateString('ru-RU', { weekday: 'short' }), value: val, count: dl.length, isToday: i === 0 })
+    }
+    return r
+  }, [hL, h.id])
   const maxC = Math.max(h.goalDay || 1, ...chart.map(d => d.value), 1);
   const qa = v => {
     let ts = Date.now()
@@ -814,7 +819,7 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
 
       <div className="mb-4"><button onClick={() => setShowSk(!showSk)} className="text-sm text-zinc-500 flex items-center gap-1 px-3 py-2 rounded-xl border border-zinc-700/50 active:scale-95">Не получилось сегодня?</button>{showSk && <div className="mt-2 p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2"><p className="text-sm text-zinc-400">Ничего страшного, завтра получится лучше! 💪</p><input value={skipR} onChange={e => setSkipR(e.target.value)} placeholder="Что помешало? (необязательно)" className="inp" /><div className="flex gap-2"><button onClick={() => { onSkip(h.id, skipR || 'Пропуск'); setSkipR(''); setShowSk(false); }} className="flex-1 p-3 rounded-xl bg-zinc-800 text-zinc-300 font-semibold active:scale-[0.98]">Пропустить</button></div></div>}</div>
 
-      <div className="mb-4 p-3 rounded-2xl bg-zinc-900/50 border border-zinc-800"><SH text="7 дней" /><div className="flex items-end gap-1 h-12">{chart.map((d, i) => <div key={i} className="flex-1 flex flex-col items-center gap-0.5"><div className="flex-1 w-full flex items-end"><div className="w-full rounded-t" style={{ height: d.value > 0 ? `${Math.max((d.value / maxC) * 100, 20)}%` : '2px', background: d.value > 0 ? (d.isToday ? h.color : `${h.color}99`) : '#27272a', opacity: d.value > 0 ? 1 : 0.4 }} /></div><div className={`text-[9px] tabular-nums ${d.isToday ? 'text-zinc-300 font-bold' : 'text-zinc-600'}`}>{d.day}</div></div>)}</div></div>
+      <div className="mb-4 p-3 rounded-2xl bg-zinc-900/50 border border-zinc-800"><SH text="Последние 7 дней" /><div className="flex items-end gap-1 h-12">{chart.map((d, i) => <div key={i} className="flex-1 flex flex-col items-center gap-0.5"><div className="flex-1 w-full flex items-end"><div className="w-full rounded-t transition-all" style={{ height: d.count > 0 ? `${Math.max((d.value / maxC) * 100, 15)}%` : "3px", background: d.count > 0 ? (d.isToday ? h.color : `${h.color}bb`) : "#27272a", opacity: d.count > 0 ? 1 : 0.3 }} /></div><div className={`text-[9px] tabular-nums ${d.isToday ? 'text-zinc-300 font-bold' : 'text-zinc-600'}`}>{d.day}</div></div>)}</div></div>
 
       <div><div className="flex items-center justify-between mb-2"><SH text="История" /><span className="text-sm text-zinc-600 tabular-nums">{hL.length}</span></div>
         {hL.length === 0 && <div className="text-center py-6 text-zinc-600">Нет записей</div>}
@@ -850,8 +855,16 @@ function EditH({ habit, onBack, onSave }) {
     <div className="max-w-md mx-auto px-4 pb-12">
       <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">{habit ? 'Редактировать' : 'Новая привычка'}</h1></div>
       <div className="space-y-4">
-        <Fld l="Название"><input value={f.name} onChange={e => u('name', e.target.value)} className="inp" /></Fld>
-        <Fld l="Иконка"><input value={f.icon} onChange={e => u('icon', e.target.value)} className="inp" maxLength={4} /></Fld>
+        <Fld l="Название и иконка">
+          <div className="flex gap-2">
+            <input value={f.name} onChange={e => u('name', e.target.value)} placeholder="Название привычки" className="inp flex-1" />
+            <input value={f.icon} onChange={e => {
+              const emoji = [...e.target.value].filter(c => /\p{Emoji}/u.test(c))
+              u('icon', emoji[emoji.length - 1] || f.icon)
+            }} className="inp text-center text-2xl" style={{width:56}} maxLength={8} />
+          </div>
+          <div className="text-xs text-zinc-600 mt-1 px-1">Нажмите на поле иконки и выберите эмодзи</div>
+        </Fld>
         <Fld l="Категория"><Sel opts={CATS.map(c => ({ v: c, l: c }))} val={f.cat} onCh={v => u('cat', v)} /></Fld>
         <Fld l="Тип"><Sel opts={TYP} val={f.type} onCh={v => u('type', v)} /></Fld>
         <Fld l="Единица">
@@ -862,11 +875,23 @@ function EditH({ habit, onBack, onSave }) {
           </div>
           <input value={f.unit} onChange={e => u('unit', e.target.value)} placeholder="или введите своё..." className="inp" />
         </Fld>
-        <Fld l="Цель/день"><input type="number" value={f.goalDay} onChange={e => u('goalDay', parseFloat(e.target.value) || 0)} className="inp tabular-nums" /></Fld>
-        <Fld l="Цель/мес"><input type="number" value={f.goalMonth} onChange={e => u('goalMonth', parseFloat(e.target.value) || 0)} className="inp tabular-nums" /></Fld>
+        <Fld l="Цели">
+          <div className="flex gap-2">
+            <div className="flex-1"><div className="text-xs text-zinc-600 mb-1">В день</div><input type="number" value={f.goalDay} onChange={e => u('goalDay', parseFloat(e.target.value) || 0)} className="inp tabular-nums" /></div>
+            <div className="flex-1"><div className="text-xs text-zinc-600 mb-1">В месяц</div><input type="number" value={f.goalMonth} onChange={e => u('goalMonth', parseFloat(e.target.value) || 0)} className="inp tabular-nums" /></div>
+          </div>
+        </Fld>
         <Fld l="Направление"><Sel opts={[{ v: 'up', l: 'Больше ↑' }, { v: 'down', l: 'Меньше ↓' }]} val={f.dir} onCh={v => u('dir', v)} /></Fld>
         <Fld l="Время дня"><Sel opts={TOD} val={f.time} onCh={v => u('time', v)} /></Fld>
-        <Fld l="Частота"><Sel opts={FRQ} val={f.period} onCh={v => u('period', v)} />{(f.period === 'weekly' || f.period === 'custom') && <div className="flex gap-1.5 mt-2">{DR.map((d, i) => <button key={i} onClick={() => togD(i)} className={`w-10 h-10 rounded-lg font-medium ${f.days.includes(i) ? 'bg-emerald-500 text-white' : 'bg-zinc-800 text-zinc-400'}`}>{d}</button>)}</div>}</Fld>
+        <Fld l="Частота">
+          <div className="flex flex-wrap gap-1.5">
+            {[{v:'daily',l:'Каждый день'},{v:'weekly',l:'Дни недели'},{v:'monthly',l:'Числа месяца'}].map(o =>
+              <button key={o.v} onClick={() => u('period', o.v)} className={`px-3 py-2.5 rounded-lg font-medium text-sm ${f.period === o.v ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-800 text-zinc-400'}`}>{o.l}</button>
+            )}
+          </div>
+          {f.period === 'weekly' && <div className="flex gap-1.5 mt-2">{DR.map((d, i) => <button key={i} onClick={() => togD(i)} className={`flex-1 py-2 rounded-lg font-medium text-sm ${f.days.includes(i) ? 'bg-emerald-500 text-white' : 'bg-zinc-800 text-zinc-400'}`}>{d}</button>)}</div>}
+          {f.period === 'monthly' && <div className="flex flex-wrap gap-1 mt-2">{Array.from({length:31},(_,i)=>i+1).map(n => <button key={n} onClick={() => togD(n-1)} className={`w-9 h-9 rounded-lg text-sm font-medium ${f.days.includes(n-1) ? 'bg-emerald-500 text-white' : 'bg-zinc-800 text-zinc-400'}`}>{n}</button>)}</div>}
+        </Fld>
         <Fld l="Цвет"><input type="color" value={f.color} onChange={e => u('color', e.target.value)} className="w-14 h-12 rounded-lg border border-zinc-700 bg-zinc-900" /></Fld>
         <Fld l="Зачем"><textarea value={f.why} onChange={e => u('why', e.target.value)} rows={2} className="inp resize-none" placeholder="Что изменится через год..." /></Fld>
         <button onClick={() => { if (f.name) onSave({ ...f, id: habit?.id || '' }); }} className="btn-primary bg-emerald-500 text-zinc-950 active:scale-[0.98]">{habit ? 'Сохранить' : 'Добавить'}</button>
@@ -898,43 +923,149 @@ function Plan({ habits, logs, onBack }) {
 
 /* ============ STATS ============ */
 function Stats({ logs, habits, skips, onBack }) {
-  const [period, setPeriod] = useState('week');
-  const [hFilter, setHF] = useState('all');
-  const now = new Date(); now.setHours(0, 0, 0, 0);
-  const ranges = { week: 7, month: 30, quarter: 90, year: 365 };
-  const days = ranges[period] || 7;
-  const from = now.getTime() - (days - 1) * 86400000;
-  const fL = logs.filter(l => l.ts >= from && (hFilter === 'all' || l.habitId === hFilter));
-  const fH = hFilter === 'all' ? habits : habits.filter(h => h.id === hFilter);
+  const [period, setPeriod] = useState('week')
+  const [hFilter, setHF] = useState('all')
+  const now = new Date(); now.setHours(0,0,0,0)
+  const ranges = { week: 7, month: 30, quarter: 90, year: 365 }
+  const days = ranges[period]
+  const from = now.getTime() - (days - 1) * 86400000
+  const fL = logs.filter(l => l.ts >= from && !l.isSkip && (hFilter === 'all' || l.habitId === hFilter))
+  const fH = hFilter === 'all' ? habits : habits.filter(h => h.id === hFilter)
 
+  // Тепловая карта
   const heatData = useMemo(() => {
-    const r = [];
+    const r = []
     for (let i = days - 1; i >= 0; i--) {
-      const ds = now.getTime() - i * 86400000;
-      const dl = fL.filter(l => l.ts >= ds && l.ts < ds + 86400000);
-      const total = fH.length;
-      const done = fH.filter(h => { const hl = dl.filter(l => l.habitId === h.id); const v = sumH(hl, h); return h.dir === 'up' ? (h.goalDay > 0 && v >= h.goalDay) : (h.type === 'check' && v > 0); }).length;
-      r.push({ date: new Date(ds), pct: total ? done / total : 0 });
+      const ds = now.getTime() - i * 86400000
+      const dl = fL.filter(l => l.ts >= ds && l.ts < ds + 86400000)
+      const done = fH.filter(h => { const hl = dl.filter(l => l.habitId === h.id); return sumH(hl, h) > 0 }).length
+      r.push({ date: new Date(ds), pct: fH.length ? done / fH.length : 0, done, total: fH.length })
     }
-    return r;
-  }, [fL, fH, days]);
+    return r
+  }, [fL, fH, days])
 
-  const totalLogs = fL.length;
-  const totalSkips = skips.filter(s => new Date(s.date).getTime() >= from).length;
-  const avgPct = heatData.length ? Math.round(heatData.reduce((s, d) => s + d.pct, 0) / heatData.length * 100) : 0;
-  const bestDay = heatData.reduce((b, d) => d.pct > b.pct ? d : b, heatData[0] || { pct: 0 });
-  const bestPct = Math.round((bestDay?.pct || 0) * 100);
+  // Топ привычек
+  const topHabits = useMemo(() => {
+    return habits.map(h => {
+      const hL = fL.filter(l => l.habitId === h.id)
+      const streak = calcStr(logs.filter(l => l.habitId === h.id), h)
+      const daysLogged = new Set(hL.map(l => new Date(l.ts).toISOString().slice(0,10))).size
+      const pct = Math.round(daysLogged / days * 100)
+      return { h, daysLogged, pct, streak }
+    }).filter(x => x.daysLogged > 0).sort((a,b) => b.pct - a.pct).slice(0, 5)
+  }, [fL, days])
+
+  const avgPct = heatData.length ? Math.round(heatData.reduce((s,d) => s + d.pct, 0) / heatData.length * 100) : 0
+  const totalLogs = fL.length
+  const totalSkips = skips.filter(s => new Date(s.date+'T00:00').getTime() >= from).length
+  const bestDay = heatData.reduce((b,d) => d.pct > b.pct ? d : b, heatData[0] || {pct:0})
+  const bestStreak = habits.reduce((max, h) => { const s = calcStr(logs.filter(l => l.habitId === h.id), h); return s > max.s ? {s, h} : max }, {s:0, h:null})
+
+  const periodLabel = {week:'за неделю', month:'за месяц', quarter:'за квартал', year:'за год'}[period]
 
   return (
     <div className="max-w-md mx-auto px-4 pb-12">
-      <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">📊 Статистика</h1></div>
-      <div className="flex gap-1.5 mb-3">{[{v:'week',l:'Нед'},{v:'month',l:'Мес'},{v:'quarter',l:'Кварт'},{v:'year',l:'Год'}].map(p => <button key={p.v} onClick={() => setPeriod(p.v)} className={`flex-1 py-2.5 rounded-lg font-semibold text-sm ${period === p.v ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-900 text-zinc-400'}`}>{p.l}</button>)}</div>
-      <div className="mb-3"><select value={hFilter} onChange={e => setHF(e.target.value)} className="inp">{<option value="all">Все привычки</option>}{habits.map(h => <option key={h.id} value={h.id}>{h.icon} {h.name}</option>)}</select></div>
-      <div className="grid grid-cols-4 gap-2 mb-4"><MStat l="Записей" v={totalLogs} /><MStat l="Пропусков" v={totalSkips} /><MStat l="Средний %" v={`${avgPct}%`} /><MStat l="Лучший день" v={`${bestPct}%`} /></div>
-      <div className="mb-4"><SH text="Heatmap" /><div className="flex flex-wrap gap-1">{heatData.map((d, i) => { const g = Math.round(d.pct * 4); const colors = ['#27272a', '#064e3b', '#047857', '#10b981', '#34d399']; return <div key={i} className="w-4 h-4 rounded-sm" style={{ background: colors[g] }} title={`${d.date.toLocaleDateString('ru-RU')}: ${Math.round(d.pct * 100)}%`} />; })}</div></div>
-      {hFilter !== 'all' && (() => { const h = habits.find(x => x.id === hFilter); if (!h) return null; const chartD = []; for (let i = Math.min(days, 14) - 1; i >= 0; i--) { const ds = now.getTime() - i * 86400000; const dl = fL.filter(l => l.ts >= ds && l.ts < ds + 86400000); chartD.push({ day: new Date(ds).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }), value: sumH(dl, h) }); } const mx = Math.max(h.goalDay || 1, ...chartD.map(d => d.value), 1); return <div className="mb-4 p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800"><div className="text-sm text-zinc-400 mb-2">{h.icon} {h.name}</div><div className="flex items-end gap-1 h-24">{chartD.map((d, i) => <div key={i} className="flex-1 flex flex-col items-center gap-1"><div className="flex-1 w-full flex items-end"><div className="w-full rounded-t-sm" style={{ height: `${(d.value / mx) * 100}%`, minHeight: d.value > 0 ? '3px' : '0', background: h.color }} /></div><div className="text-[8px] text-zinc-600 tabular-nums">{d.day}</div></div>)}</div></div>; })()}
+      <div className="pt-5 pb-3 flex items-center gap-3">
+        <button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button>
+        <h1 className="font-bold flex-1">📊 Статистика</h1>
+      </div>
+
+      <div className="flex gap-1.5 mb-4">
+        {[{v:'week',l:'7 дней'},{v:'month',l:'Месяц'},{v:'quarter',l:'Квартал'},{v:'year',l:'Год'}].map(p =>
+          <button key={p.v} onClick={() => setPeriod(p.v)} className={`flex-1 py-2 rounded-lg font-semibold text-sm ${period === p.v ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-900 text-zinc-400'}`}>{p.l}</button>
+        )}
+      </div>
+
+      <div className="mb-3">
+        <select value={hFilter} onChange={e => setHF(e.target.value)} className="inp">
+          <option value="all">Все привычки</option>
+          {habits.map(h => <option key={h.id} value={h.id}>{h.icon} {h.name}</option>)}
+        </select>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mb-4">
+        <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800 text-center">
+          <div className="text-3xl font-black" style={{color:'#7c3aed'}}>{avgPct}%</div>
+          <div className="text-xs text-zinc-500 mt-1">Средний % выполнения</div>
+        </div>
+        <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800 text-center">
+          <div className="text-3xl font-black text-emerald-400">{totalLogs}</div>
+          <div className="text-xs text-zinc-500 mt-1">Записей {periodLabel}</div>
+        </div>
+        <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800 text-center">
+          <div className="text-3xl font-black text-amber-400">{bestStreak.s}🔥</div>
+          <div className="text-xs text-zinc-500 mt-1">{bestStreak.h ? `Серия: ${bestStreak.h.name}` : 'Лучшая серия'}</div>
+        </div>
+        <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800 text-center">
+          <div className="text-3xl font-black text-rose-400">{totalSkips}</div>
+          <div className="text-xs text-zinc-500 mt-1">Пропусков {periodLabel}</div>
+        </div>
+      </div>
+
+      {topHabits.length > 0 && <div className="mb-4">
+        <SH text="Топ привычек" />
+        <div className="space-y-2">
+          {topHabits.map(({h, daysLogged, pct, streak}) => (
+            <div key={h.id} className="p-3 rounded-xl bg-zinc-900/50 border border-zinc-800">
+              <div className="flex items-center gap-2 mb-1.5">
+                <span>{h.icon}</span>
+                <span className="flex-1 font-medium text-sm">{h.name}</span>
+                <span className="font-bold tabular-nums" style={{color: h.color}}>{pct}%</span>
+              </div>
+              <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden">
+                <div className="h-full rounded-full transition-all" style={{width:`${pct}%`, background: h.color}} />
+              </div>
+              <div className="flex gap-3 mt-1.5 text-xs text-zinc-500">
+                <span>{daysLogged} из {days} дней</span>
+                {streak > 0 && <span>🔥 серия {streak}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>}
+
+      <div className="mb-4">
+        <SH text={`Тепловая карта (${days} дней)`} />
+        <div className="flex flex-wrap gap-1 mt-1">
+          {heatData.map((d, i) => {
+            const g = Math.round(d.pct * 4)
+            const colors = ['#27272a','#4c1d95','#6d28d9','#7c3aed','#a78bfa']
+            return <div key={i} className="w-4 h-4 rounded-sm cursor-default" style={{background: colors[g]}} title={`${d.date.toLocaleDateString('ru-RU')}: ${d.done}/${d.total} (${Math.round(d.pct*100)}%)`} />
+          })}
+        </div>
+        <div className="flex items-center gap-2 mt-2 text-xs text-zinc-600">
+          <span>Меньше</span>
+          {['#27272a','#4c1d95','#6d28d9','#7c3aed','#a78bfa'].map((c,i) => <div key={i} className="w-3 h-3 rounded-sm" style={{background:c}} />)}
+          <span>Больше</span>
+        </div>
+      </div>
+
+      {hFilter !== 'all' && (() => {
+        const h = habits.find(x => x.id === hFilter)
+        if (!h) return null
+        const chartD = []
+        const n = Math.min(days, 14)
+        for (let i = n-1; i >= 0; i--) {
+          const ds = now.getTime() - i * 86400000
+          const dl = fL.filter(l => l.ts >= ds && l.ts < ds + 86400000)
+          chartD.push({ day: new Date(ds).toLocaleDateString('ru-RU',{day:'2-digit',month:'2-digit'}), value: sumH(dl, h) })
+        }
+        const mx = Math.max(h.goalDay || 1, ...chartD.map(d => d.value), 1)
+        return <div className="mb-4 p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800">
+          <div className="text-sm font-semibold mb-3">{h.icon} {h.name} — динамика</div>
+          <div className="flex items-end gap-1 h-20">
+            {chartD.map((d, i) => <div key={i} className="flex-1 flex flex-col items-center gap-0.5">
+              <div className="flex-1 w-full flex items-end">
+                <div className="w-full rounded-t" style={{height: d.value > 0 ? `${Math.max(d.value/mx*100,10)}%` : '2px', background: h.color, opacity: d.value > 0 ? 1 : 0.2}} />
+              </div>
+              <div className="text-[8px] text-zinc-600 tabular-nums">{d.day}</div>
+            </div>)}
+          </div>
+          {h.goalDay > 0 && <div className="mt-2 text-xs text-zinc-500">Цель: {h.goalDay} {h.unit}/день</div>}
+        </div>
+      })()}
     </div>
-  );
+  )
 }
 
 /* ============ ACHIEVEMENTS ============ */
@@ -1067,7 +1198,12 @@ function IdeasScr({ ideas, onBack, onUpd, show, undo, setUndo }) {
         </div>
           <div className="flex gap-1">{['low','medium','high'].map(p => <button key={p} onClick={() => setNP(p)} className={`px-2 py-1.5 rounded-lg flex items-center gap-1 text-xs ${nP === p ? 'ring-2 ring-zinc-400 bg-zinc-700' : 'bg-zinc-800'}`}>{pI[p]}</button>)}</div>
         </div>
-        <button onClick={addIdea} className="w-full p-3 rounded-xl bg-zinc-100 text-zinc-900 font-semibold active:scale-[0.98]">Записать</button>
+        <button onClick={() => {
+          if (!nT) return
+          const idea = { id: Date.now(), date: tk(), time: new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'}), text: nT, category: nC, priority: nP, done: false }
+          onAdd(idea)
+          setNT(''); setNC(''); setNP('medium')
+        }} className="w-full p-3 rounded-xl bg-zinc-100 text-zinc-900 font-semibold active:scale-[0.98]">Записать</button>
       </div>
 
       <div className="flex gap-2 mb-3">
@@ -1207,8 +1343,8 @@ function QkSet({ habits, quickIds, onBack, onSave }) {
     <div className="max-w-md mx-auto px-4 pb-12">
       <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">⚡ Быстрые записи</h1></div>
       <p className="text-sm text-zinc-500 mb-3">Выберите до 4 привычек для быстрого доступа с главного экрана.</p>
-      <div className="space-y-1.5">{all.map(h => <button key={h.id} onClick={() => tog(h.id)} className={`w-full p-3.5 rounded-xl flex items-center gap-3 ${sel.includes(h.id) ? 'bg-violet-500/10 border border-violet-500/30' : 'bg-zinc-900/50 border border-zinc-800/40'}`}><span className="text-xl">{h.icon}</span><span className="flex-1 text-left font-medium">{h.name}</span>{sel.includes(h.id) && <span className="text-emerald-400 font-bold">✓</span>}</button>)}</div>
-      <button onClick={() => onSave(sel)} className="btn-primary bg-emerald-500 text-zinc-950 mt-4 active:scale-[0.98]">Сохранить</button>
+      <p className="text-xs text-zinc-500 mb-3 px-1">Выбор применяется сразу</p>
+      <div className="space-y-1.5">{all.map(h => <button key={h.id} onClick={() => { const n = sel.includes(h.id) ? sel.filter(x => x !== h.id) : sel.length < 4 ? [...sel, h.id] : sel; setSel(n); onSave(n); }} className={`w-full p-3.5 rounded-xl flex items-center gap-3 ${sel.includes(h.id) ? 'bg-violet-500/10 border border-violet-500/30' : 'bg-zinc-900/50 border border-zinc-800/40'}`}><span className="text-xl">{h.icon}</span><span className="flex-1 text-left font-medium">{h.name}</span>{sel.includes(h.id) && <span className="text-emerald-400 font-bold">✓</span>}</button>)}</div>
     </div>
   );
 }
@@ -1270,31 +1406,62 @@ function Acct({ user, onBack, onOut }) {
 
 /* ============ EXPORT ============ */
 function Exp({ logs, habits, skips, onBack }) {
+  const [copied, setCopied] = useState(false)
   const csv = useMemo(() => {
-    const rows = ['Дата,Время,Привычка,Значение,Единица,Заметка'];
+    const rows = ['Дата,Время,Привычка,Значение,Единица,Заметка']
     logs.forEach(l => {
-      const h = habits.find(x => x.id === l.habitId);
-      const d = new Date(l.ts);
-      rows.push(`${d.toLocaleDateString('ru-RU')},${d.toLocaleTimeString('ru-RU')},${h?.name || l.habitId},${l.value},${h?.unit || ''},${(l.note || '').replace(/,/g, ';')}`);
-    });
-    return rows.join('\n');
-  }, [logs, habits]);
+      const h = habits.find(x => x.id === l.habitId)
+      const d = new Date(l.ts)
+      rows.push([d.toLocaleDateString('ru-RU'), d.toLocaleTimeString('ru-RU'), h?.name || l.habitId, l.value, h?.unit || '', (l.note || '').replace(/,/g, ';')].join(','))
+    })
+    return rows.join('\n')
+  }, [logs, habits])
+
   const dl = () => {
-    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' });
-    const u = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = u; a.download = `wildhabits_${tk()}.csv`; a.click(); URL.revokeObjectURL(u);
-  };
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8' })
+    const u = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = u; a.download = 'wildhabits_' + tk() + '.csv'; a.click(); URL.revokeObjectURL(u)
+  }
+
+  const aiText = 'Я загружу тебе CSV файл с данными моих привычек из WildHabits. Столбцы: Дата, Время, Привычка, Значение, Единица, Заметка.\n\nПроанализируй данные:\n1. Какие привычки выполняю чаще/реже всего?\n2. В какие дни недели наиболее продуктивен?\n3. Какие привычки имеют положительную/отрицательную динамику?\n4. Топ-3 инсайта из данных?\n5. Что стоит улучшить?\n\nОтвечай конкретно с цифрами из данных.'
+
+  const copyAI = () => {
+    navigator.clipboard.writeText(aiText).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
+  }
+
   return (
     <div className="max-w-md mx-auto px-4 pb-12">
-      <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">📤 Экспорт</h1></div>
-      <div className="space-y-3">
-        <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800"><div className="grid grid-cols-3 gap-2 mb-3"><MStat l="Записей" v={logs.length} /><MStat l="Привычек" v={habits.length} /><MStat l="Пропусков" v={skips.length} /></div><button onClick={dl} className="btn-primary bg-emerald-500 text-zinc-950 active:scale-[0.98]">📥 Скачать CSV</button></div>
-        <p className="text-sm text-zinc-500 text-center">Откройте CSV в Google Sheets или Excel</p>
+      <div className="pt-5 pb-3 flex items-center gap-3">
+        <button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button>
+        <h1 className="font-bold flex-1">📤 Экспорт данных</h1>
+      </div>
+      <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800 mb-3">
+        <div className="grid grid-cols-3 gap-2 mb-3"><MStat l="Записей" v={logs.length} /><MStat l="Привычек" v={habits.length} /><MStat l="Пропусков" v={skips.length} /></div>
+        <button onClick={dl} className="btn-primary bg-emerald-500 text-zinc-950 active:scale-[0.98]">📥 Скачать CSV</button>
+      </div>
+      <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800 mb-3">
+        <div className="font-semibold mb-2">📊 Google Sheets</div>
+        <div className="space-y-1.5 text-sm text-zinc-400">
+          {['Скачайте CSV файл выше', 'Откройте sheets.google.com → новая таблица', 'Файл → Импорт → Загрузить → выберите файл', 'Разделитель: запятая → Импортировать'].map((s,i) => <div key={i} className="flex gap-2"><span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center text-xs shrink-0">{i+1}</span><span>{s}</span></div>)}
+        </div>
+      </div>
+      <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800 mb-3">
+        <div className="font-semibold mb-2">📱 Excel</div>
+        <div className="space-y-1.5 text-sm text-zinc-400">
+          {['Скачайте CSV файл', 'Excel → Данные → Из текстового/CSV файла', 'Кодировка UTF-8, разделитель — запятая'].map((s,i) => <div key={i} className="flex gap-2"><span className="w-5 h-5 rounded-full bg-violet-500/20 text-violet-400 flex items-center justify-center text-xs shrink-0">{i+1}</span><span>{s}</span></div>)}
+        </div>
+      </div>
+      <div className="p-4 rounded-2xl bg-violet-500/10 border border-violet-500/20">
+        <div className="font-semibold mb-1">🤖 Промт для ИИ-анализа</div>
+        <div className="text-xs text-zinc-500 mb-2">Скопируйте, вставьте в ChatGPT и приложите CSV файл</div>
+        <div className="p-3 rounded-xl bg-zinc-900/50 text-xs text-zinc-400 leading-relaxed mb-3 max-h-28 overflow-y-auto whitespace-pre-wrap">{aiText}</div>
+        <button onClick={copyAI} className="btn-primary active:scale-[0.98]" style={{background: copied ? '#10b981' : '#7c3aed', color:'white'}}>
+          {copied ? '✓ Скопировано!' : '📋 Скопировать промт'}
+        </button>
       </div>
     </div>
-  );
+  )
 }
-
 /* ============ HELP ============ */
 function HelpScr({ onBack }) {
   const sections = [
@@ -1342,10 +1509,13 @@ function EventsScr({ onBack, user, show }) {
 
   useEffect(() => {
     if (!user) return
-    supabase.from('events').select('*').eq('user_id', user.id).order('date').then(({ data }) => {
-      setEvents(data || []); setLoading(false)
-    })
-  }, [user])
+    supabase.from('events').select('*').eq('user_id', user.id).order('date')
+      .then(({ data, error }) => {
+        if (error) console.error('events load error:', error)
+        setEvents(data || [])
+        setLoading(false)
+      })
+  }, [user?.id])
 
   const UNIT_OPTS = [
     {v:'years', l:'Лет'}, {v:'months', l:'Месяцев'}, {v:'weeks', l:'Недель'},
@@ -1387,11 +1557,13 @@ function EventsScr({ onBack, user, show }) {
     if (!form.name || !form.date) return
     const payload = { user_id: user.id, name: form.name, icon: form.icon, date: form.date, time: form.time, repeats_yearly: form.repeats, units: form.units }
     if (editing) {
-      const { data } = await supabase.from('events').update(payload).eq('id', editing).select().single()
+      const { data, error } = await supabase.from('events').update(payload).eq('id', editing).select().single()
+      if (error) { show('Ошибка: ' + error.message); return }
       if (data) { setEvents(p => p.map(e => e.id === editing ? data : e)); show('Обновлено ✓') }
       setEditing(null)
     } else {
-      const { data } = await supabase.from('events').insert(payload).select().single()
+      const { data, error } = await supabase.from('events').insert(payload).select().single()
+      if (error) { show('Ошибка сохранения: ' + error.message); return }
       if (data) { setEvents(p => [...p, data]); show('Событие добавлено ✓') }
     }
     resetForm(); setAdding(false)
