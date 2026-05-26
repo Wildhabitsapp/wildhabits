@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import * as db from '../lib/db'
 
 
-const V = 'v4.6';
+const V = 'v4.7';
 const S = k => `wh:${k}`;
 const DR = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 const mD = (d = new Date()) => { const v = d.getDay(); return v === 0 ? 6 : v - 1; };
@@ -91,7 +91,9 @@ const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap');
 * { font-family: 'Montserrat', system-ui, sans-serif; box-sizing: border-box; }
 body { font-size: clamp(15px, 4vw, 17px); }
-body::before { content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; opacity: 0.03; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); background-size: 200px 200px; }
+body.theme-light .bg-zinc-900.border-r { background: #ffffff !important; box-shadow: 2px 0 20px rgba(0,0,0,0.1) !important; }
+body.theme-light .bg-zinc-900.border-r * { color: #1c1c1e !important; }
+body::before { content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; opacity: 0.06; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); background-size: 200px 200px; }
 body.theme-light { background: #f2f2f7 !important; color: #000000 !important; }
 body.theme-light .min-h-screen { background: #f2f2f7 !important; }
 body.theme-light .bg-zinc-950 { background: #f2f2f7 !important; }
@@ -315,7 +317,7 @@ export default function App() {
             show('Идея ✓'); gainXp(3)
           }} />}
 
-        {scr === 'detail' && habit && <Detail habit={habit} logs={logs} timer={tmrs[habit.id]} tick={tick} affirm={affirm} onBack={() => go('home')} addLog={addLogFn} delLog={delLog} updLog={updLog} stTmr={() => stTmr(habit.id)} spTmr={n => spTmr(habit.id, n)} cTmr={() => cTmr(habit.id)}
+        {scr === 'detail' && habit && <Detail habit={habit} logs={logs} timer={tmrs[habit.id]} tick={tick} affirm={affirm} onBack={() => go('home')} addLog={addLogFn} delLog={delLog} updLog={updLog} stTmr={() => stTmr(habit.id)} spTmr={n => spTmr(habit.id, n)} cTmr={() => cTmr(habit.id)} onEditHabit={id => { setEId(id); go('editH') }}
           onSkip={async (id, r) => { const s = { habitId: id, date: tk(), reason: r, ts: Date.now() }; if (user) await db.addSkip(user.id, s); setSk(p => [s, ...p]); addLogFn({ habitId: id, value: 0, note: r || 'Пропуск', ts: Date.now(), isSkip: true }); show('Пропуск') }}
           eLTs={eLTs} setELTs={setELTs} habits={habits}
           setHab={async h => { setHab(h); if (user) for (const hab of h) await db.saveHabit(user.id, hab) }} />}
@@ -343,7 +345,7 @@ export default function App() {
 
         {scr === 'plan' && <Plan habits={actH} logs={logs} onBack={() => go('home')} />}
         {scr === 'stats' && <Stats logs={logs} habits={actH} skips={skips} onBack={() => go('home')} />}
-        {scr === 'ach' && <Ach logs={logs} habits={actH} xp={xp} onBack={() => go('home')} />}
+        {scr === 'ach' && <Ach logs={logs} habits={actH} onBack={() => go('home')} />}
         {scr === 'mot' && <Mot quotes={quotes} onBack={() => go('home')} onSave={async q => { setQ(q); await saveSetting('quotes', q); show('Сохранено') }} />}
         {scr === 'aff' && <AffScr text={affirm} onBack={() => go('home')} onSave={async t => { setAf(t); await saveSetting('affirm', t); show('Сохранено') }} />}
         {scr === 'ideas' && <IdeasScr ideas={ideas} onBack={() => go('home')}
@@ -479,7 +481,7 @@ function MenuOvl({ onClose, go, undo, onUndo, xp, avatar, userName }) {
       <div className="absolute left-0 top-0 bottom-0 w-72 bg-zinc-900 border-r border-zinc-800 p-5 overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-xl overflow-hidden">
+            <div className="w-12 h-12 rounded-full bg-violet-500/20 border border-violet-500/30 flex items-center justify-center text-2xl overflow-hidden">
               {avatar ? <img src={avatar} alt="avatar" className="w-full h-full object-cover" /> : '👤'}
             </div>
             <div className="font-semibold text-sm">{userName || 'Профиль'}</div>
@@ -672,53 +674,108 @@ function HRow({ h, logs, tmrs, onClick, done, onSettings }) {
 
 /* ============ MEDITATION PLAYER ============ */
 function MedPlayer() {
-  const [playing, setPlaying] = useState(false)
-  const [withMusic, setWithMusic] = useState(true)
+  const [selMin, setSelMin] = useState(15)
+  const [customMin, setCustomMin] = useState('')
+  const [running, setRunning] = useState(false)
+  const [remaining, setRemaining] = useState(15 * 60)
+  const [withMusic, setWithMusic] = useState(null)
   const audioRef = useRef(null)
+  const timerRef = useRef(null)
 
-  const toggle = (music) => {
-    if (audioRef.current) {
-      if (playing && withMusic === music) {
-        audioRef.current.pause()
-        setPlaying(false)
-        return
-      }
-      audioRef.current.pause()
-    }
-    const audio = new Audio(music ? '/meditation.mp3' : null)
+  const totalSec = (customMin ? parseInt(customMin) : selMin) * 60
+
+  const start = (music) => {
+    const sec = (customMin ? parseInt(customMin) : selMin) * 60
+    setRemaining(sec)
+    setWithMusic(music)
+    setRunning(true)
     if (music) {
+      const audio = new Audio('/meditation.mp3')
       audio.loop = true
       audioRef.current = audio
       audio.play().catch(() => {})
-      setWithMusic(true)
-      setPlaying(true)
-    } else {
-      setWithMusic(false)
-      setPlaying(true)
-      audioRef.current = null
     }
   }
 
-  useEffect(() => () => { if (audioRef.current) audioRef.current.pause() }, [])
+  const stop = () => {
+    setRunning(false)
+    setWithMusic(null)
+    if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+    clearInterval(timerRef.current)
+    setRemaining(totalSec)
+  }
+
+  useEffect(() => {
+    if (running) {
+      timerRef.current = setInterval(() => {
+        setRemaining(r => {
+          if (r <= 1) {
+            clearInterval(timerRef.current)
+            setRunning(false)
+            setWithMusic(null)
+            if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
+            return 0
+          }
+          return r - 1
+        })
+      }, 1000)
+    }
+    return () => clearInterval(timerRef.current)
+  }, [running])
+
+  useEffect(() => () => {
+    if (audioRef.current) audioRef.current.pause()
+    clearInterval(timerRef.current)
+  }, [])
+
+  const h = Math.floor(remaining / 3600)
+  const m = Math.floor((remaining % 3600) / 60)
+  const s = remaining % 60
+  const pct = running ? (1 - remaining / totalSec) : 0
+  const presets = [5, 10, 15, 20, 30]
 
   return (
-    <div className="mb-3 p-4 rounded-2xl bg-purple-500/10 border border-purple-500/20">
-      <div className="text-sm font-semibold text-purple-400 mb-3">🧘 Медитация</div>
-      <div className="flex gap-2">
-        <button onClick={() => toggle(true)} className={`flex-1 p-3 rounded-xl font-semibold text-sm active:scale-[0.98] ${playing && withMusic ? 'bg-purple-500 text-white' : 'bg-zinc-800 text-zinc-300'}`}>
-          {playing && withMusic ? '⏸ С музыкой' : '▶ С музыкой'}
-        </button>
-        <button onClick={() => toggle(false)} className={`flex-1 p-3 rounded-xl font-semibold text-sm active:scale-[0.98] ${playing && !withMusic ? 'bg-purple-500 text-white' : 'bg-zinc-800 text-zinc-300'}`}>
-          {playing && !withMusic ? '⏸ Без музыки' : '▶ Без музыки'}
-        </button>
-      </div>
-      {playing && <div className="mt-2 text-center text-xs text-purple-400">● Воспроизведение...</div>}
+    <div className="mb-4 p-5 rounded-2xl bg-purple-500/10 border border-purple-500/20">
+      <div className="text-sm font-semibold text-purple-400 mb-4 text-center">🧘 Медитация</div>
+
+      {!running ? <>
+        <div className="flex gap-1.5 mb-3 flex-wrap justify-center">
+          {presets.map(p => <button key={p} onClick={() => { setSelMin(p); setCustomMin('') }} className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${selMin === p && !customMin ? 'bg-purple-500 text-white' : 'bg-zinc-800 text-zinc-400'}`}>{p} мин</button>)}
+        </div>
+        <div className="flex gap-2 mb-4">
+          <input type="number" value={customMin} onChange={e => setCustomMin(e.target.value)} placeholder="Свои минуты..." className="inp flex-1 text-center tabular-nums" min="1" max="180" />
+        </div>
+        <div className="text-3xl font-black text-center text-purple-300 mb-4 tabular-nums">
+          {String(Math.floor((customMin || selMin) * 60 / 60)).padStart(2,'0')}:{String((customMin || selMin) * 60 % 60).padStart(2,'0')}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => start(true)} className="flex-1 p-3.5 rounded-xl bg-purple-500 text-white font-semibold active:scale-[0.98]">🔉 С музыкой</button>
+          <button onClick={() => start(false)} className="flex-1 p-3.5 rounded-xl bg-zinc-800 text-zinc-300 font-semibold active:scale-[0.98]">🔇 Без музыки</button>
+        </div>
+      </> : <>
+        <div className="text-center mb-4">
+          <div className="relative inline-flex items-center justify-center mb-3">
+            <svg width="160" height="160" className="-rotate-90">
+              <circle cx="80" cy="80" r="70" stroke="#3f3f46" strokeWidth="8" fill="none" />
+              <circle cx="80" cy="80" r="70" stroke="#a855f7" strokeWidth="8" fill="none" strokeLinecap="round" strokeDasharray={2*Math.PI*70} strokeDashoffset={2*Math.PI*70*(1-pct)} style={{transition:'stroke-dashoffset 1s linear'}} />
+            </svg>
+            <div className="absolute text-center">
+              <div className="text-4xl font-black tabular-nums text-purple-300">
+                {h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
+              </div>
+              <div className="text-xs text-zinc-500 mt-1">{withMusic ? '🔉 с музыкой' : '🔇 тишина'}</div>
+            </div>
+          </div>
+          {remaining === 0 && <div className="text-emerald-400 font-semibold text-lg mb-2">✓ Медитация завершена!</div>}
+        </div>
+        <button onClick={stop} className="w-full p-3.5 rounded-xl bg-zinc-800 text-zinc-300 font-semibold active:scale-[0.98]">⏹ Остановить</button>
+      </>}
     </div>
   )
 }
 
 /* ============ DETAIL ============ */
-function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, updLog, stTmr, spTmr, cTmr, onSkip, eLTs, setELTs, habits, setHab }) {
+function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, updLog, stTmr, spTmr, cTmr, onSkip, eLTs, setELTs, habits, setHab, onEditHabit }) {
   const [note, setNote] = useState(''); const [mv, setMv] = useState(''); const [skipR, setSkipR] = useState('');
   const [showSk, setShowSk] = useState(false); const [eN, setEN] = useState(''); const [eV, setEV] = useState('');
   const [affO, setAffO] = useState(false)
@@ -779,6 +836,7 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
         <button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button>
         <span className="text-2xl">{h.icon}</span>
         <div className="flex-1 min-w-0"><h1 className="font-bold truncate">{h.name}</h1><div className="text-sm text-zinc-500">{h.cat}</div></div>
+        {onEditHabit && <button onClick={() => onEditHabit(h.id)} className="text-zinc-500 active:scale-90 p-1 text-xl">⚙️</button>}
       </div>
       {h.why && <div className="mb-3 px-1"><div className="text-sm text-zinc-500 leading-relaxed italic">{h.why}</div></div>}
 
@@ -822,16 +880,16 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
           <div className="flex gap-2"><input type="number" value={mv} onChange={e => setMv(e.target.value)} placeholder={walkUnits[walkMode]} className="inp flex-1 tabular-nums" /><button onClick={() => { if (mv) { addLog({ habitId: h.id, value: parseFloat(mv), note: `${walkUnits[walkMode]}` }); setMv(''); setNote(''); } }} className="px-5 rounded-xl bg-zinc-100 text-zinc-900 active:scale-95 font-semibold">OK</button></div>
         </div>}
 
-        {h.type === 'duration' && !timer && h.id !== 'H22' && <div className="space-y-2"><button onClick={stTmr} className="btn-primary border-2 active:scale-[0.98]" style={{ borderColor: h.color, color: h.color }}>▶ Начать</button><div className="grid grid-cols-4 gap-2">{[15, 30, 45, 60].map(m => <button key={m} onClick={() => qa(m)} className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 active:scale-95 font-semibold tabular-nums">{m}</button>)}</div><div className="flex gap-2"><input type="number" value={mv} onChange={e => setMv(e.target.value)} placeholder="мин" className="inp flex-1 tabular-nums" /><button onClick={() => { if (mv) qa(parseFloat(mv)); }} className="px-5 rounded-xl bg-zinc-100 text-zinc-900 active:scale-95 font-semibold">OK</button></div></div>}
+        {h.type === 'duration' && !timer && h.id !== 'H22' && <div className="space-y-2"><button onClick={stTmr} className="btn-primary border-2 active:scale-[0.98] mb-1" style={{ borderColor: h.color, color: h.color }}>▶ Начать таймер</button><div className="flex gap-2 items-center"><button onClick={() => qa(15)} className="flex-1 p-3 rounded-xl bg-zinc-900 border border-zinc-800 active:scale-95 font-semibold">15</button><button onClick={() => qa(30)} className="flex-1 p-3 rounded-xl bg-zinc-900 border border-zinc-800 active:scale-95 font-semibold">30</button><button onClick={() => qa(60)} className="flex-1 p-3 rounded-xl bg-zinc-900 border border-zinc-800 active:scale-95 font-semibold">60</button><input type="number" value={mv} onChange={e => setMv(e.target.value)} placeholder="мин" className="inp flex-1 tabular-nums" style={{minWidth:60}} /><button onClick={() => { if (mv) qa(parseFloat(mv)) }} className="px-4 py-3 rounded-xl bg-zinc-100 text-zinc-900 active:scale-95 font-semibold">OK</button></div></div>}
         {h.type === 'duration' && timer && <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/25"><div className="text-2xl font-bold tabular-nums text-amber-400 mb-1">{fmtEl(elapsed)}</div><div className="text-sm text-zinc-500 mb-3">начало: {new Date(timer).toLocaleTimeString('ru-RU')}</div><div className="flex gap-2"><button onClick={() => spTmr(note)} className="flex-1 p-3.5 rounded-xl bg-emerald-500 active:scale-[0.98] font-semibold flex items-center justify-center gap-2">⏹ Стоп</button><button onClick={cTmr} className="px-5 rounded-xl bg-zinc-800 text-zinc-400">✕</button></div></div>}
         {h.type === 'count' && h.id !== 'H22' && <div className="space-y-2">{h.unit === 'мл' ? <div className="grid grid-cols-4 gap-2">{[200, 250, 350, 500].map(n => <button key={n} onClick={() => qa(n)} className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 active:scale-95 font-semibold tabular-nums">{n}</button>)}</div> : h.unit === 'г' ? <div className="grid grid-cols-3 gap-2">{[20, 25, 30].map(n => <button key={n} onClick={() => qa(n)} className="p-3.5 rounded-xl bg-zinc-900 border border-zinc-800 active:scale-95 font-semibold tabular-nums">{n}г</button>)}</div> : <><button onClick={() => qa(1)} className="btn-primary border-2 active:scale-[0.98]" style={{ borderColor: h.color, color: h.color }}>+ 1</button><div className="grid grid-cols-3 gap-2">{[2, 3, 5].map(n => <button key={n} onClick={() => qa(n)} className="p-3 rounded-xl bg-zinc-900 border border-zinc-800 active:scale-95 font-semibold tabular-nums">+{n}</button>)}</div></>}<div className="flex gap-2"><input type="number" value={mv} onChange={e => setMv(e.target.value)} placeholder={h.unit} className="inp flex-1 tabular-nums" /><button onClick={() => { if (mv) qa(parseFloat(mv)); }} className="px-5 rounded-xl bg-zinc-100 text-zinc-900 active:scale-95 font-semibold">OK</button></div></div>}
         {h.type === 'check' && h.id === 'H20' && <div className="space-y-2"><div className="flex gap-2"><select value={cSocial} onChange={e => setCSocial(e.target.value)} className="inp flex-1">{SOCIALS.map(s => <option key={s} value={s}>{s}</option>)}</select><select value={cType} onChange={e => setCType(e.target.value)} className="inp flex-1">{CONTENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div><button onClick={() => { addLog({ habitId: h.id, value: 1, note: `${cSocial}: ${cType}` }); }} className="btn-primary border-2 active:scale-[0.98]" style={{ borderColor: h.color, color: h.color }}>📸 Опубликовано</button></div>}
-        {h.type === 'check' && h.id !== 'H17' && h.id !== 'H20' && h.id !== 'H21' && <button onClick={() => qa(1)} className="btn-primary border-2 active:scale-[0.98]" style={{ borderColor: h.color, color: h.color }}>✓ Сделано</button>}
+        {h.type === 'check' && h.id !== 'H17' && h.id !== 'H20' && h.id !== 'H21' && <button onClick={() => qa(1)} className="btn-primary font-black text-lg active:scale-[0.98]" style={{ background: h.color + '20', borderColor: h.color, border: '2px solid', color: h.color }}>✓ Сделано</button>}
         {h.type === 'rating' && <div className="grid grid-cols-5 gap-2">{[1, 2, 3, 4, 5].map(n => { const c = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#10b981'][n - 1]; return <button key={n} onClick={() => qa(n)} className="aspect-square rounded-2xl border-2 active:scale-95 font-bold text-xl flex items-center justify-center" style={{ borderColor: c, color: c }}>{n}</button>; })}</div>}
-        {h.type === 'scale' && <div className="flex gap-2"><input type="number" step="0.1" value={mv} onChange={e => setMv(e.target.value)} placeholder={h.unit} className="inp flex-1 tabular-nums" /><button onClick={() => { if (mv) qa(parseFloat(mv)); }} className="px-5 rounded-xl bg-zinc-100 text-zinc-900 active:scale-95 font-semibold">💾</button></div>}
+        {h.type === 'scale' && <div className="flex gap-2 items-center"><input type="number" step="0.1" value={mv} onChange={e => setMv(e.target.value)} placeholder={h.unit} className="inp flex-1 tabular-nums" /><button onClick={() => { if (mv) qa(parseFloat(mv)) }} className="flex-1 p-3.5 rounded-xl font-bold active:scale-[0.98]" style={{background: h.color + '20', color: h.color, border: '2px solid ' + h.color}}>Записать</button></div>}
       </div>
 
-      <div className="mb-4"><div className="flex gap-2 mb-2"><button onClick={() => setShowAltDate(!showAltDate)} className={`flex-1 text-xs px-3 py-2.5 rounded-xl border active:scale-95 ${showAltDate ? 'border-violet-500/50 text-violet-400 bg-violet-500/10' : 'border-zinc-700/50 text-zinc-500'}`}>📅 За другое время</button><button onClick={() => setShowSk(!showSk)} className={`flex-1 text-xs px-3 py-2.5 rounded-xl border active:scale-95 ${showSk ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-zinc-700/50 text-zinc-500'}`}>😔 Не получилось</button></div>{showSk && <div className="mt-2 p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2"><p className="text-sm text-zinc-400">Ничего страшного, завтра получится лучше! 💪</p><input value={skipR} onChange={e => setSkipR(e.target.value)} placeholder="Что помешало? (необязательно)" className="inp" /><div className="flex gap-2"><button onClick={() => { onSkip(h.id, skipR || 'Пропуск'); setSkipR(''); setShowSk(false); }} className="flex-1 p-3 rounded-xl bg-zinc-800 text-zinc-300 font-semibold active:scale-[0.98]">Пропустить</button></div></div>}</div>
+      <div className="mb-4"><div className="flex gap-2 mb-2"><button onClick={() => setShowSk(!showSk)} className={`flex-1 text-xs px-3 py-2.5 rounded-xl border active:scale-95 ${showSk ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-zinc-700/50 text-zinc-500'}`}>😔 Не получилось</button></div>{showSk && <div className="mt-2 p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2"><p className="text-sm text-zinc-400">Ничего страшного, завтра получится лучше! 💪</p><input value={skipR} onChange={e => setSkipR(e.target.value)} placeholder="Что помешало? (необязательно)" className="inp" /><div className="flex gap-2"><button onClick={() => { onSkip(h.id, skipR || 'Пропуск'); setSkipR(''); setShowSk(false); }} className="flex-1 p-3 rounded-xl bg-zinc-800 text-zinc-300 font-semibold active:scale-[0.98]">Пропустить</button></div></div>}</div>
 
       <div className="mb-4 p-3 rounded-2xl bg-zinc-900/50 border border-zinc-800"><SH text="Последние 7 дней" /><div className="flex items-end gap-1 h-12">{chart.map((d, i) => <div key={i} className="flex-1 flex flex-col items-center gap-0.5"><div className="flex-1 w-full flex items-end"><div className="w-full rounded-t transition-all" style={{ height: d.count > 0 ? `${Math.max((d.value / maxC) * 100, 15)}%` : "3px", background: d.count > 0 ? (d.isToday ? h.color : `${h.color}bb`) : "#27272a", opacity: d.count > 0 ? 1 : 0.3 }} /></div><div className={`text-[9px] tabular-nums ${d.isToday ? 'text-zinc-300 font-bold' : 'text-zinc-600'}`}>{d.day}</div></div>)}</div></div>
 
@@ -1083,38 +1141,104 @@ function Stats({ logs, habits, skips, onBack }) {
 }
 
 /* ============ ACHIEVEMENTS ============ */
-function Ach({ logs, habits, xp, onBack }) {
-  const lv = getLevel(xp);
-  const achs = useMemo(() => {
-    const r = [];
-    const now2 = new Date(); now2.setHours(0, 0, 0, 0);
-    habits.forEach(h => {
-      const hL = logs.filter(l => l.habitId === h.id);
-      const streak = calcStr(hL, h);
-      if (streak >= 3) r.push({ icon: '🔥', title: `${h.name}: серия ${streak}`, desc: `${streak} дней подряд!`, color: h.color });
-      if (hL.length >= 100) r.push({ icon: '💯', title: `${h.name}: 100 записей`, desc: 'Сотня отметок!', color: h.color });
-      else if (hL.length >= 50) r.push({ icon: '🌟', title: `${h.name}: 50 записей`, desc: 'Полсотни!', color: h.color });
-      else if (hL.length >= 10) r.push({ icon: '✨', title: `${h.name}: 10 записей`, desc: 'Первая десятка!', color: h.color });
-    });
-    if (logs.length >= 1000) r.push({ icon: '🏆', title: '1000 записей!', desc: 'Невероятно!', color: '#f59e0b' });
-    else if (logs.length >= 500) r.push({ icon: '🥇', title: '500 записей!', desc: 'Впечатляет!', color: '#eab308' });
-    else if (logs.length >= 100) r.push({ icon: '🥈', title: '100 записей!', desc: 'Отличный старт!', color: '#a3a3a3' });
-    return r;
-  }, [logs, habits]);
+function Ach({ logs, habits, onBack }) {
+  const cleanLogs = logs.filter(l => !l.isSkip)
+
+  const streaks = useMemo(() => habits.map(h => {
+    const hL = cleanLogs.filter(l => l.habitId === h.id)
+    const streak = calcStr(hL, h)
+    const total = hL.length
+    const now2 = new Date(); now2.setHours(0,0,0,0)
+    const last7 = new Set(hL.filter(l => l.ts >= now2.getTime()-6*86400000).map(l => new Date(l.ts).toISOString().slice(0,10))).size
+    const last30 = new Set(hL.filter(l => l.ts >= now2.getTime()-29*86400000).map(l => new Date(l.ts).toISOString().slice(0,10))).size
+    const bestStreak = (() => { let best=0, cur=0; for(let i=0;i<365;i++){const d=new Date();d.setHours(0,0,0,0);const ds=d.getTime()-i*86400000,de=ds+86400000;const dl=hL.filter(l=>l.ts>=ds&&l.ts<de);const v=sumH(dl,h);const ok=h.dir==='up'?(h.goalDay>0&&v>=h.goalDay):(v>0&&v<=(h.goalDay||999));if(ok)cur++;else cur=0;if(cur>best)best=cur;}return best; })()
+    return { h, streak, total, last7, last30, bestStreak }
+  }).filter(x => x.total > 0).sort((a,b) => b.streak - a.streak), [cleanLogs, habits])
+
+  const badges = useMemo(() => {
+    const list = []
+    streaks.forEach(({ h, streak, total, last7, last30, bestStreak }) => {
+      if (streak >= 365) list.push({ icon: '🌟', title: `${h.name}: 365 дней!`, desc: 'Целый год без пропусков', color: '#f59e0b', cat: 'streak' })
+      else if (streak >= 100) list.push({ icon: '🏆', title: `${h.name}: ${streak} дней подряд`, desc: 'Серия 100+ дней — феноменально!', color: '#f59e0b', cat: 'streak' })
+      else if (streak >= 30) list.push({ icon: '🔥', title: `${h.name}: ${streak} дней подряд`, desc: 'Месяц без пропусков!', color: '#ef4444', cat: 'streak' })
+      else if (streak >= 7) list.push({ icon: '⚡', title: `${h.name}: ${streak} дней подряд`, desc: 'Неделя подряд!', color: '#eab308', cat: 'streak' })
+      if (last7 >= 7) list.push({ icon: '🎯', title: `${h.name}: идеальная неделя`, desc: '7 из 7 дней на этой неделе', color: '#10b981', cat: 'week' })
+      if (last30 >= 28) list.push({ icon: '🏅', title: `${h.name}: лучший месяц`, desc: `${last30} из 30 дней`, color: '#7c3aed', cat: 'month' })
+      if (total >= 500) list.push({ icon: '💎', title: `${h.name}: 500 записей`, desc: 'Полтысячи отметок!', color: '#a78bfa', cat: 'total' })
+      else if (total >= 100) list.push({ icon: '💯', title: `${h.name}: 100 записей`, desc: 'Сотня выполнений!', color: '#60a5fa', cat: 'total' })
+      else if (total >= 30) list.push({ icon: '🌱', title: `${h.name}: 30 записей`, desc: 'Привычка формируется!', color: '#34d399', cat: 'total' })
+    })
+    const total = cleanLogs.length
+    if (total >= 1000) list.push({ icon: '🚀', title: '1000 записей!', desc: 'Вы мастер привычек', color: '#f59e0b', cat: 'total' })
+    else if (total >= 500) list.push({ icon: '⭐', title: '500 записей!', desc: 'Полпути к тысяче', color: '#eab308', cat: 'total' })
+    else if (total >= 100) list.push({ icon: '✨', title: '100 записей!', desc: 'Уверенный старт!', color: '#60a5fa', cat: 'total' })
+    else if (total >= 10) list.push({ icon: '🌿', title: '10 записей!', desc: 'Первые шаги сделаны', color: '#34d399', cat: 'total' })
+    return list
+  }, [streaks, cleanLogs])
+
+  const catGroups = [
+    { key: 'streak', label: '🔥 Серии подряд' },
+    { key: 'week', label: '🎯 Достижения недели' },
+    { key: 'month', label: '🏅 Достижения месяца' },
+    { key: 'total', label: '💯 Всего записей' },
+  ]
 
   return (
     <div className="max-w-md mx-auto px-4 pb-12">
-      <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">🏆 Ачивки</h1></div>
-      <div className="mb-5 p-5 rounded-2xl bg-gradient-to-br from-violet-500/10 to-purple-500/10 border border-violet-500/20">
-        <div className="flex items-center gap-3 mb-3"><span className="text-4xl">{lv.icon}</span><div><div className="text-xl font-bold">{lv.name}</div><div className="text-zinc-400">{xp} XP</div></div></div>
-        {lv.next && <div><div className="flex justify-between text-sm text-zinc-500 mb-1"><span>До «{lv.next.name}»</span><span>{lv.next.min - xp} XP</span></div><div className="h-2.5 rounded-full bg-zinc-800 overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-violet-500 to-purple-400 transition-all" style={{ width: `${((xp - lv.min) / (lv.next.min - lv.min)) * 100}%` }} /></div></div>}
-        <div className="mt-3 grid grid-cols-5 gap-1">{LEVELS.map((l, i) => <div key={i} className={`text-center py-2 rounded-lg ${i <= lv.idx ? 'bg-violet-500/20' : 'bg-zinc-800/30'}`}><div className="text-lg">{l.icon}</div><div className="text-[10px] text-zinc-500">{l.name}</div></div>)}</div>
+      <div className="pt-5 pb-3 flex items-center gap-3">
+        <button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button>
+        <h1 className="font-bold flex-1">🏆 Достижения</h1>
       </div>
-      <SH text={`Достижения · ${achs.length}`} />
-      {achs.length === 0 && <div className="text-center py-8 text-zinc-500">Продолжайте — первые ачивки уже скоро! 🚀</div>}
-      <div className="space-y-2">{achs.map((a, i) => <div key={i} className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800 flex items-center gap-3 pop-in" style={{ animationDelay: `${i * 0.05}s` }}><span className="text-2xl">{a.icon}</span><div><div className="font-semibold">{a.title}</div><div className="text-sm text-zinc-500">{a.desc}</div></div></div>)}</div>
+
+      <div className="p-4 rounded-2xl bg-gradient-to-br from-violet-500/10 to-purple-500/5 border border-violet-500/20 mb-4 text-center">
+        <div className="text-5xl font-black tabular-nums text-violet-400">{cleanLogs.length}</div>
+        <div className="text-sm text-zinc-400 mt-1">всего записей</div>
+        <div className="text-xs text-zinc-600 mt-0.5">Каждая запись — шаг к лучшей версии себя</div>
+      </div>
+
+      {streaks.length > 0 && <div className="mb-5">
+        <SH text="Текущие серии" />
+        <div className="space-y-2">
+          {streaks.slice(0, 6).map(({ h, streak, total, bestStreak }) => (
+            <div key={h.id} className="p-3.5 rounded-xl bg-zinc-900/50 border border-zinc-800 flex items-center gap-3">
+              <span className="text-2xl">{h.icon}</span>
+              <div className="flex-1">
+                <div className="font-semibold">{h.name}</div>
+                <div className="text-xs text-zinc-500 mt-0.5">{total} записей · рекорд {bestStreak} дн</div>
+              </div>
+              <div className="text-right">
+                {streak > 0
+                  ? <><div className="text-2xl font-black tabular-nums" style={{ color: h.color }}>{streak}</div><div className="text-[10px] text-zinc-500">дней 🔥</div></>
+                  : <div className="text-zinc-600 text-sm">нет серии</div>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>}
+
+      {catGroups.map(cat => {
+        const items = badges.filter(b => b.cat === cat.key)
+        if (!items.length) return null
+        return <div key={cat.key} className="mb-4">
+          <SH text={cat.label} />
+          <div className="space-y-2">
+            {items.map((b, i) => (
+              <div key={i} className="p-3.5 rounded-2xl flex items-center gap-3 pop-in" style={{ background: b.color + '10', border: `1px solid ${b.color}25` }}>
+                <span className="text-2xl">{b.icon}</span>
+                <div><div className="font-semibold">{b.title}</div><div className="text-sm text-zinc-500">{b.desc}</div></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      })}
+
+      {badges.length === 0 && <div className="text-center py-10 text-zinc-500">
+        <div className="text-5xl mb-3">🌱</div>
+        <div className="font-medium mb-1">Первые достижения близко!</div>
+        <div className="text-sm">Выполняйте привычки несколько дней подряд чтобы открыть значки</div>
+      </div>}
     </div>
-  );
+  )
 }
 
 /* ============ MOTIVATION ============ */
@@ -1457,278 +1581,50 @@ function Exp({ logs, habits, skips, onBack }) {
 /* ============ HELP ============ */
 function HelpScr({ onBack }) {
   const sections = [
-    { icon: '🏠', title: 'Привычки дня', desc: 'Главный экран — все ваши привычки на сегодня, сгруппированные по времени дня: утро, день, вечер. Нажмите на любую привычку чтобы открыть её и сделать запись. Выполненные привычки уходят вниз в раздел «Сделано».' },
-    { icon: '📋', title: 'Все привычки', desc: 'Полный список всех привычек. Нажмите «+» чтобы добавить новую. Свайпните или нажмите иконку карандаша для редактирования. Можно архивировать привычку — она исчезнет с главного экрана но данные сохранятся.' },
-    { icon: '⚡', title: 'Быстрые записи', desc: '4 кнопки в правом верхнем углу главного экрана — запись самых частых привычек в одно нажатие. Настройте какие привычки там показывать в разделе «Быстрые записи» в меню.' },
-    { icon: '📅', title: 'План', desc: 'Календарь месяца. Цветные точки под датой показывают запланированные привычки. Нажмите на день чтобы увидеть список привычек на этот день.' },
-    { icon: '📊', title: 'Статистика', desc: 'Графики и тепловая карта выполнения привычек. Выбирайте период: неделя, месяц, квартал, год. Фильтруйте по конкретной привычке чтобы видеть детальный график.' },
-    { icon: '🏆', title: 'Ачивки и уровни', desc: 'Каждая запись даёт вам XP (опыт). Накапливайте XP и поднимайтесь по уровням: Новичок → Практик → Мастер → Гуру → Легенда. Серии без пропусков дают дополнительные достижения.' },
-    { icon: '💡', title: 'Идеи', desc: 'Записывайте идеи которые приходят в голову. Добавляйте категорию и приоритет (высокий, средний, низкий). Когда идея реализована — отметьте галочкой, она перейдёт во вкладку «Сделано».' },
-    { icon: '📅', title: 'События', desc: 'Отслеживайте важные даты — сколько времени прошло или осталось. Разовые события (путешествия, достижения) и повторяющиеся ежегодно (дни рождения, годовщины).' },
-    { icon: '📝', title: 'Рефлексия', desc: 'Ежедневная рефлексия на главном экране: задачи дня с отметкой выполнено/не выполнено, благодарности, достижения. Настройте свои секции в разделе Рефлексия → Настройки.' },
-    { icon: '💬', title: 'Мотивация и Аффирмации', desc: 'Мотивация — список вдохновляющих фраз, одна случайная показывается на главном экране. Аффирмации — утренние утверждения, читайте их вслух каждое утро.' },
-    { icon: '📤', title: 'Экспорт', desc: 'Скачайте все ваши данные в формате CSV. Откройте в Google Sheets или Excel для анализа.' },
-    { icon: '🔒', title: 'Ваши данные', desc: 'Все данные хранятся в защищённом облаке и не пропадут. Можете зайти с любого устройства через браузер.' },
-  ];
+    { icon: '🏠', title: 'Привычки дня', desc: 'Главный экран — все привычки на сегодня, сгруппированные по времени (утро, день, вечер). Нажмите на привычку чтобы записать выполнение. Выполненные уходят вниз в раздел «Сделано». В правом верхнем углу — 4 кнопки быстрой записи.' },
+    { icon: '📋', title: 'Настроить привычки', desc: 'Полный список всех привычек. Нажмите «+» чтобы создать свою. Нажмите карандаш ✏️ для редактирования или 📦 для архивирования. Архивированные привычки скрыты с главного экрана, но данные сохранены.' },
+    { icon: '⚡', title: 'Быстрые записи', desc: 'Настройте 4 кнопки на главном экране для самых частых привычек. Запись в одно нажатие без открытия карточки. Идеально для воды, энергии, простых галочек. Настройте в меню → Быстрые записи.' },
+    { icon: '📅', title: 'План', desc: 'Календарь месяца с цветными точками. Каждая точка — одна привычка запланированная на этот день. Нажмите на дату чтобы увидеть список привычек на этот день.' },
+    { icon: '📊', title: 'Статистика', desc: 'Аналитика привычек за выбранный период (7 дней, месяц, квартал, год). Средний % выполнения, топ-5 привычек с прогресс-барами, тепловая карта и детальный график по конкретной привычке. Выберите привычку в фильтре для детальной аналитики.' },
+    { icon: '🏆', title: 'Достижения', desc: 'Реальные достижения на основе ваших данных. Серии дней подряд, рекорды за неделю и месяц, количество записей. Значки открываются автоматически когда вы достигаете целей. Мотивирует продолжать!' },
+    { icon: '💡', title: 'Идеи', desc: 'Записывайте идеи которые приходят в голову. Укажите приоритет (высокий/средний/низкий) и тему. Создавайте свои темы. Когда идея реализована — отметьте галочкой, она перейдёт во вкладку «Сделано».' },
+    { icon: '📅', title: 'События', desc: 'Важные даты с отсчётом времени. Создайте событие — укажите дату, иконку и что показывать (лет/месяцев/дней). Для дней рождений включите «Повторяется каждый год». Редактируйте или удаляйте события.' },
+    { icon: '📝', title: 'Рефлексия', desc: 'Ежедневная практика на главном экране: 3 задачи дня с отметкой ✓/✗, благодарности, достижения. Настройте свои секции в разделе Рефлексия → Настройки. История всех записей хранится в разделе.' },
+    { icon: '💬', title: 'Мотивация', desc: 'Коллекция вдохновляющих фраз. Одна случайная фраза показывается на главном экране каждый день. Редактируйте список: нажмите ✏️ чтобы добавить свои фразы. Каждая фраза с новой строки.' },
+    { icon: '🌟', title: 'Аффирмации', desc: 'Утренние утверждения для программирования подсознания. Читайте вслух каждое утро с чувством. Нажмите ✏️ чтобы отредактировать под себя. В карточке привычки «Аффирмации» откроется полноэкранный ридер.' },
+    { icon: '🧘', title: 'Медитация', desc: 'Таймер медитации с обратным отсчётом. Выберите время (5/10/15/20/30 мин или своё) и нажмите «С музыкой» или «Без музыки». Круговой таймер показывает прогресс. Музыка играет по кругу до конца.' },
+    { icon: '📚', title: 'Вся история', desc: 'Лента всех записей за последние 7 дней сгруппированных по дням. Видите все выполненные привычки, пропуски с причинами и записи «Без плана».' },
+    { icon: '📤', title: 'Экспорт', desc: 'Скачайте все данные в CSV файл. Откройте в Google Sheets или Excel по инструкции в разделе. Есть готовый промт для ИИ-анализа ваших данных — скопируйте и вставьте в ChatGPT вместе с файлом.' },
+    { icon: '⚙️', title: 'Настройки', desc: 'Переключение тёмной/светлой темы. Инструкция как добавить приложение на экран телефона (работает как нативное приложение без App Store).' },
+  ]
   return (
     <div className="max-w-md mx-auto px-4 pb-12">
-      <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">❓ О приложении</h1></div>
-      <div className="mb-4 p-4 rounded-2xl bg-violet-500/10 border border-violet-500/20 text-center">
-        <img src="/logo.png" alt="WH" className="h-10 w-auto mx-auto mb-2" />
-        <div className="font-bold text-violet-400">WildHabits {V}</div>
-        <div className="text-sm text-zinc-400 mt-1">Трекер привычек для осознанной жизни</div>
+      <div className="pt-5 pb-3 flex items-center gap-3">
+        <button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button>
+        <h1 className="font-bold flex-1">❓ О приложении</h1>
       </div>
-      <div className="space-y-2 mb-6">{sections.map((s, i) => <div key={i} className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800"><div className="flex items-center gap-2 mb-1"><span className="text-lg">{s.icon}</span><span className="font-semibold">{s.title}</span></div><p className="text-sm text-zinc-400 leading-relaxed">{s.desc}</p></div>)}</div>
+      <div className="mb-5 p-4 rounded-2xl bg-violet-500/10 border border-violet-500/20 text-center">
+        <img src="/logo.png" alt="WH" className="h-12 w-auto mx-auto mb-2" />
+        <div className="font-black text-violet-400 text-lg">WildHabits {V}</div>
+        <div className="text-sm text-zinc-400 mt-1">Трекер привычек и лайфстайл-помощник</div>
+      </div>
+      <div className="space-y-2 mb-6">
+        {sections.map((s, i) => (
+          <div key={i} className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800">
+            <div className="flex items-center gap-2 mb-1.5"><span className="text-xl">{s.icon}</span><span className="font-bold">{s.title}</span></div>
+            <p className="text-sm text-zinc-400 leading-relaxed">{s.desc}</p>
+          </div>
+        ))}
+      </div>
       <div className="p-4 rounded-xl bg-zinc-900/50 border border-zinc-800 text-center">
-        <div className="text-sm text-zinc-500">Создатель приложения</div>
-        <div className="font-semibold mt-1">Колесников Дмитрий</div>
+        <div className="text-sm text-zinc-500 mb-1">Создатель приложения</div>
+        <div className="font-bold text-base mt-1">Колесников Дмитрий</div>
         <a href="https://diko.top" target="_blank" rel="noopener noreferrer" className="text-violet-400 text-sm">diko.top</a>
       </div>
     </div>
   )
 }
 
-
-
-/* ============ СОБЫТИЯ ============ */
-function EventsScr({ onBack, user, show }) {
-  const [events, setEvents] = useState([])
-  const [adding, setAdding] = useState(false)
-  const [editing, setEditing] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [form, setForm] = useState({ name: '', icon: '📅', date: '', time: '00:00', repeats: false, units: ['years','months','days'] })
-  const upd = (k, v) => setForm(f => ({...f, [k]: v}))
-
-  useEffect(() => {
-    if (!user) return
-    supabase.from('events').select('*').eq('user_id', user.id).order('date')
-      .then(({ data, error }) => {
-        if (error) console.error('events load error:', error)
-        setEvents(data || [])
-        setLoading(false)
-      })
-  }, [user?.id])
-
-  const UNIT_OPTS = [
-    {v:'years', l:'Лет'}, {v:'months', l:'Месяцев'}, {v:'weeks', l:'Недель'},
-    {v:'days', l:'Дней'}, {v:'hours', l:'Часов'}, {v:'minutes', l:'Минут'}
-  ]
-  const togUnit = (u) => upd('units', form.units.includes(u) ? form.units.filter(x => x !== u) : [...form.units, u])
-
-  const calcDiff = (ev) => {
-    const now = new Date()
-    let target = new Date(ev.date + 'T' + (ev.time || '00:00'))
-    if (ev.repeats_yearly) {
-      target.setFullYear(now.getFullYear())
-      if (target < now) target.setFullYear(now.getFullYear() + 1)
-    }
-    const diff = target - now
-    const isPast = diff < 0
-    const abs = Math.abs(diff)
-    const totalSec = Math.floor(abs / 1000)
-    const totalMin = Math.floor(totalSec / 60)
-    const totalHours = Math.floor(totalMin / 60)
-    const totalDays = Math.floor(totalHours / 24)
-    const totalWeeks = Math.floor(totalDays / 7)
-    const totalMonths = Math.floor(totalDays / 30.44)
-    const totalYears = Math.floor(totalDays / 365.25)
-    const units = ev.units || ['years','months','days']
-    const parts = []
-    if (units.includes('years') && totalYears > 0) parts.push(`${totalYears} ${totalYears === 1 ? 'год' : totalYears < 5 ? 'года' : 'лет'}`)
-    if (units.includes('months') && totalMonths > 0) { const m = totalMonths % 12; if (m > 0) parts.push(`${m} мес`) }
-    if (units.includes('weeks') && totalWeeks > 0 && !units.includes('years')) parts.push(`${totalWeeks} нед`)
-    if (units.includes('days')) { const d = totalDays % 30; if (d > 0 || parts.length === 0) parts.push(`${d || totalDays} дн`) }
-    if (units.includes('hours') && !units.includes('days')) parts.push(`${totalHours % 24} ч`)
-    if (units.includes('minutes') && !units.includes('hours')) parts.push(`${totalMin % 60} мин`)
-    return { text: parts.join(' ') || '0 дн', isPast }
-  }
-
-  const resetForm = () => setForm({ name: '', icon: '📅', date: '', time: '00:00', repeats: false, units: ['years','months','days'] })
-
-  const save = async () => {
-    if (!form.name || !form.date) return
-    const payload = { user_id: user.id, name: form.name, icon: form.icon, date: form.date, time: form.time, repeats_yearly: form.repeats, units: form.units }
-    if (editing) {
-      const { data, error } = await supabase.from('events').update(payload).eq('id', editing).select().single()
-      if (error) { show('Ошибка: ' + error.message); return }
-      if (data) { setEvents(p => p.map(e => e.id === editing ? data : e)); show('Обновлено ✓') }
-      setEditing(null)
-    } else {
-      const { data, error } = await supabase.from('events').insert(payload).select().single()
-      if (error) { show('Ошибка сохранения: ' + error.message); return }
-      if (data) { setEvents(p => [...p, data]); show('Событие добавлено ✓') }
-    }
-    resetForm(); setAdding(false)
-  }
-
-  const startEdit = (ev) => {
-    setForm({ name: ev.name, icon: ev.icon || '📅', date: ev.date, time: ev.time || '00:00', repeats: ev.repeats_yearly, units: ev.units || ['years','months','days'] })
-    setEditing(ev.id); setAdding(true)
-  }
-
-  const del = async (id) => {
-    await supabase.from('events').delete().eq('id', id)
-    setEvents(p => p.filter(e => e.id !== id)); show('Удалено')
-  }
-
-  return (
-    <div className="max-w-md mx-auto px-4 pb-12">
-      <div className="pt-5 pb-3 flex items-center gap-3">
-        <button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button>
-        <h1 className="font-bold flex-1">📅 События</h1>
-        <button onClick={() => { resetForm(); setEditing(null); setAdding(!adding) }} className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xl active:scale-95">{adding ? '✕' : '+'}</button>
-      </div>
-
-      {adding && (
-        <div className="mb-4 p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3">
-          <div className="text-sm font-semibold text-zinc-400 mb-1">{editing ? 'Редактировать событие' : 'Новое событие'}</div>
-          <div className="flex gap-2">
-            <input value={form.icon} onChange={e => upd('icon', e.target.value)} className="inp text-center text-2xl" style={{width:56}} maxLength={4} placeholder="📅" />
-            <input value={form.name} onChange={e => upd('name', e.target.value)} placeholder="Название события" className="inp flex-1" />
-          </div>
-          <div>
-            <div className="text-xs text-zinc-500 mb-1.5">Дата события</div>
-            <input type="date" value={form.date} onChange={e => upd('date', e.target.value)} className="inp w-full" />
-          </div>
-          <div>
-            <div className="text-xs text-zinc-500 mb-1.5">Время (необязательно)</div>
-            <TimeScroller hour={form.time.split(':')[0]} minute={form.time.split(':')[1]} onHour={h => upd('time', h + ':' + form.time.split(':')[1])} onMinute={m => upd('time', form.time.split(':')[0] + ':' + m)} />
-          </div>
-          <button onClick={() => upd('repeats', !form.repeats)} className={`w-full p-3 rounded-xl border text-sm font-medium text-left ${form.repeats ? 'bg-violet-500/10 border-violet-500/30 text-violet-400' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}>
-            🔄 Повторяется каждый год {form.repeats ? '✓' : ''}
-            <div className="text-xs mt-0.5 opacity-70">Дни рождения, годовщины</div>
-          </button>
-          <div>
-            <div className="text-xs text-zinc-500 mb-1.5">Показывать:</div>
-            <div className="flex flex-wrap gap-1.5">
-              {UNIT_OPTS.map(u => (
-                <button key={u.v} onClick={() => togUnit(u.v)} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${form.units.includes(u.v) ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'bg-zinc-800 text-zinc-500'}`}>{u.l}</button>
-              ))}
-            </div>
-          </div>
-          <button onClick={save} className="btn-primary bg-emerald-500 text-zinc-950 active:scale-[0.98]">{editing ? 'Сохранить' : 'Добавить'}</button>
-        </div>
-      )}
-
-      {loading && <div className="text-center py-8 text-zinc-500">Загрузка...</div>}
-      {!loading && events.length === 0 && <div className="text-center py-10 text-zinc-500"><div className="text-4xl mb-3">📅</div><div className="font-medium mb-1">Нет событий</div><div className="text-sm">Добавьте важные даты — свадьба,<br/>день рождения, бросил курить...</div></div>}
-
-      <div className="space-y-3">
-        {events.map(ev => {
-          const { text, isPast } = calcDiff(ev)
-          return (
-            <div key={ev.id} className="rounded-2xl border border-zinc-800 overflow-hidden" style={{background: 'linear-gradient(135deg, #3730a315 0%, #1e1b4b10 100%)'}}>
-              <div className="p-4">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="font-bold text-base flex items-center gap-2">
-                      {ev.icon} {ev.name}
-                      {ev.repeats_yearly && <span className="text-[10px] text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded-full">ежегодно</span>}
-                    </div>
-                    <div className="text-xs text-zinc-500 mt-0.5">{new Date(ev.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
-                  </div>
-                </div>
-                <div className="text-3xl font-black tabular-nums" style={{color: isPast ? '#10b981' : '#f59e0b'}}>{text}</div>
-                <div className="text-sm text-zinc-500 mt-0.5">{isPast ? '— прошло' : '— осталось'}</div>
-              </div>
-              <div className="flex border-t border-zinc-800/40">
-                <button onClick={() => startEdit(ev)} className="flex-1 py-2.5 text-xs text-zinc-500 font-medium active:bg-zinc-800">✏️ Изменить</button>
-                <button onClick={() => del(ev.id)} className="flex-1 py-2.5 text-xs text-rose-400 font-medium active:bg-zinc-800 border-l border-zinc-800/40">🗑 Удалить</button>
-              </div>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-/* ============ ВСЯ ИСТОРИЯ ============ */
-function HistoryScr({ logs, habits, skips, onBack }) {
-  const days = 7
-  const now = new Date(); now.setHours(0,0,0,0)
-  const allDays = Array.from({ length: days }, (_, i) => {
-    const d = new Date(now.getTime() - i * 86400000)
-    return { date: d.toISOString().slice(0,10), label: i === 0 ? 'Сегодня' : i === 1 ? 'Вчера' : d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'short' }) }
-  })
-  return (
-    <div className="max-w-md mx-auto px-4 pb-12">
-      <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">📚 Вся история</h1></div>
-      {allDays.map(({ date, label }) => {
-        const dayLogs = logs.filter(l => new Date(l.ts).toISOString().slice(0,10) === date && !l.isSkip)
-        const daySkips = skips.filter(s => s.date === date)
-        if (!dayLogs.length && !daySkips.length) return null
-        return (
-          <div key={date} className="mb-4">
-            <SH text={label} />
-            <div className="space-y-1.5">
-              {dayLogs.map(l => {
-                const h = habits.find(x => x.id === l.habitId)
-                return <div key={l.ts} className="p-3 rounded-xl bg-zinc-900/50 border border-zinc-800/40 flex items-center gap-3">
-                  <span className="text-lg">{h?.icon || '📌'}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm">{l.habitName || h?.name || l.habitId}</div>
-                    <div className="text-xs text-zinc-500 tabular-nums">{fmtV(l.value)} {l.habitUnit || h?.unit || ''}{l.note ? ` · ${l.note}` : ''}</div>
-                  </div>
-                  <div className="text-xs text-zinc-600">{new Date(l.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</div>
-                </div>
-              })}
-              {daySkips.map(s => {
-                const h = habits.find(x => x.id === s.habitId)
-                return <div key={s.ts || s.id} className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/15 flex items-center gap-3">
-                  <span className="text-lg">{h?.icon || '❌'}</span>
-                  <div className="flex-1"><div className="font-medium text-sm text-rose-400">{h?.name} — пропуск</div>{s.reason && <div className="text-xs text-zinc-500">{s.reason}</div>}</div>
-                </div>
-              })}
-            </div>
-          </div>
-        )
-      })}
-      {logs.length === 0 && <div className="text-center py-8 text-zinc-500">Записей пока нет</div>}
-    </div>
-  )
-}
-
-
-/* ============ НАСТРОЙКИ ============ */
-function SettingsScr({ onBack, theme, onToggleTheme }) {
-  return (
-    <div className="max-w-md mx-auto px-4 pb-12">
-      <div className="pt-5 pb-3 flex items-center gap-3">
-        <button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button>
-        <h1 className="font-bold flex-1">⚙️ Настройки</h1>
-      </div>
-      <div className="space-y-3">
-        <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="font-semibold">🌗 Тема оформления</div>
-              <div className="text-sm text-zinc-500 mt-0.5">{theme === 'dark' ? 'Тёмная тема' : 'Светлая тема'}</div>
-            </div>
-            <button onClick={onToggleTheme} className={`w-14 h-7 rounded-full transition-all relative ${theme === 'light' ? 'bg-violet-500' : 'bg-zinc-700'}`}>
-              <div className={`w-5 h-5 rounded-full bg-white absolute top-1 transition-all ${theme === 'light' ? 'left-8' : 'left-1'}`} />
-            </button>
-          </div>
-        </div>
-        <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800">
-          <div className="font-semibold mb-1">🌍 Язык / Language</div>
-          <div className="text-sm text-zinc-500">Русский · English — переключатель будет добавлен в следующем обновлении</div>
-        </div>
-        <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800">
-          <div className="font-semibold mb-1">📱 Установить приложение</div>
-          <div className="text-sm text-zinc-400 leading-relaxed">
-            <div className="mb-2 font-medium">iPhone (Safari):</div>
-            <div className="text-zinc-500">Поделиться → На экран Домой → Добавить</div>
-            <div className="mt-2 mb-1 font-medium">Android (Chrome):</div>
-            <div className="text-zinc-500">⋮ → Добавить на главный экран → Добавить</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/* ============ FEEDBACK ============ */
 function Feedback({ onBack, show, user }) {
   const [theme, setTheme] = useState('Предложение')
   const [msg, setMsg] = useState('')
