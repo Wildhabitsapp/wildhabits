@@ -839,12 +839,20 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
       <div className="mb-4"><button onClick={() => setShowSk(!showSk)} className="text-sm text-zinc-500 flex items-center gap-1 px-3 py-2 rounded-xl border border-zinc-700/50 active:scale-95">Не получилось сегодня?</button>{showSk && <div className="mt-2 p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2"><p className="text-sm text-zinc-400">Ничего страшного, завтра получится лучше! 💪</p><input value={skipR} onChange={e => setSkipR(e.target.value)} placeholder="Что помешало? (необязательно)" className="inp" /><div className="flex gap-2"><button onClick={() => { onSkip(h.id, skipR || 'Пропуск'); setSkipR(''); setShowSk(false); }} className="flex-1 p-3 rounded-xl bg-zinc-800 text-zinc-300 font-semibold active:scale-[0.98]">Пропустить</button></div></div>}</div>
 
       <div className="mb-4 p-3 rounded-2xl bg-zinc-900/50 border border-zinc-800"><SH text="Последние 7 дней" /><div className="flex gap-1.5">{chart.map((d, i) => <div key={i} className="flex-1 flex flex-col items-center gap-1"><div className={`text-lg leading-none ${d.count > 0 ? '' : 'opacity-20'}`}>{d.count > 0 ? (d.value >= (h.goalDay||1) ? '✅' : '🟣') : '⬜'}</div><div className={`text-[10px] font-medium ${d.isToday ? 'text-zinc-300' : 'text-zinc-600'}`}>{d.day}</div>{d.count > 0 && <div className="text-[9px] text-zinc-500 tabular-nums">{fmtV(d.value)}</div>}</div>)}</div>
-    </div></div>useMemo, useRef } from 'react'
-import Head from 'next/head'
-import { supabase } from '../lib/supabase'
-import * as db from '../lib/db'
+    </div></div>
 
 
+      <div>
+        <div className="flex items-center justify-between mb-2"><SH text="История" /><span className="text-sm text-zinc-600 tabular-nums">{hL.length}</span></div>
+        {hL.length === 0 && <div className="text-center py-6 text-zinc-600">Нет записей</div>}
+        <div className="space-y-1.5">{hL.slice(0, 15).map(l => <div key={l.ts} className="p-3 rounded-xl bg-zinc-900/40 border border-zinc-800/40">
+          {eLTs === l.ts ? <div className="space-y-2"><input type="number" value={eV} onChange={e => setEV(e.target.value)} className="inp tabular-nums" /><input value={eN} onChange={e => setEN(e.target.value)} placeholder="Заметка" className="inp" /><div className="flex gap-2"><button onClick={() => { updLog(eLTs, { note: eN, value: parseFloat(eV) || 0 }); setELTs(null); }} className="flex-1 p-2.5 rounded-lg bg-emerald-500/20 text-emerald-400 font-medium">Сохранить</button><button onClick={() => setELTs(null)} className="px-3 p-2.5 rounded-lg bg-zinc-800 text-zinc-400">Отмена</button></div></div>
+            : <div className="flex items-start gap-2"><div className="flex-1 min-w-0"><div className="flex items-center gap-2 flex-wrap"><span className="font-semibold tabular-nums" style={{ color: h.color }}>{fmtV(l.value)} {h.unit}</span><span className="text-sm text-zinc-500">{new Date(l.ts).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span></div>{l.note && <div className="text-sm text-zinc-400 mt-0.5 italic">{l.note}</div>}</div><button onClick={() => { setELTs(l.ts); setEN(l.note || ''); setEV(String(l.value || '')); }} className="text-zinc-600 p-1">✏️</button><button onClick={() => delLog(l.ts)} className="text-zinc-600 hover:text-rose-400 p-1">🗑</button></div>}
+        </div>)}</div>
+      </div>
+    </div>
+  )
+}
 const V = 'v4.6';
 const S = k => `wh:${k}`;
 const DR = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
