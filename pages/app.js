@@ -869,12 +869,9 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
 
       <div className="mb-3"><SH text="Записать" />
         <input value={note} onChange={e => setNote(e.target.value)} placeholder="Заметка..." className="inp mb-2" />
-        <div className="mb-2">
-
-          {showAltDate && <div className="mt-1.5 flex gap-2 flex-wrap">
-            <input type="date" value={altDate} onChange={e => setAltDate(e.target.value)} className="inp flex-1" style={{minWidth:120}} />
-            <TimeScroller hour={altTime.split(':')[0] || '12'} minute={altTime.split(':')[1] || '00'} onHour={h => setAltTime(h + ':' + (altTime.split(':')[1] || '00'))} onMinute={m => setAltTime((altTime.split(':')[0] || '12') + ':' + m)} />
-          </div>}
+        <div className="flex gap-2 mb-2 items-center">
+          <input type="date" value={altDate} onChange={e => setAltDate(e.target.value)} className="inp flex-1" style={{minWidth:90, fontSize:'13px'}} />
+          <TimeScroller hour={altTime.split(':')[0]} minute={altTime.split(':')[1]} onHour={hv => setAltTime(hv + ':' + (altTime.split(':')[1] || '00'))} onMinute={mv2 => setAltTime((altTime.split(':')[0] || '00') + ':' + mv2)} />
         </div>
 
         {h.type === 'sleep' && <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3"><TimeScroller hour={bH} minute={bM} onHour={setBH} onMinute={setBM} label="🌙 Лёг" />
