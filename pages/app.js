@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import * as db from '../lib/db'
 
 
-const V = 'v4.7';
+const V = 'v4.8';
 const S = k => `wh:${k}`;
 const DR = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 const mD = (d = new Date()) => { const v = d.getDay(); return v === 0 ? 6 : v - 1; };
@@ -93,7 +93,10 @@ const CSS = `
 body { font-size: clamp(15px, 4vw, 17px); }
 body.theme-light .bg-zinc-900.border-r { background: #ffffff !important; box-shadow: 2px 0 20px rgba(0,0,0,0.1) !important; }
 body.theme-light .bg-zinc-900.border-r * { color: #1c1c1e !important; }
-body::before { content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; opacity: 0.06; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); background-size: 200px 200px; }
+body::before { content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; opacity: 0.12; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); background-size: 200px 200px; }
+body.theme-light { filter: invert(1) hue-rotate(180deg); }
+body.theme-light img, body.theme-light .no-invert { filter: invert(1) hue-rotate(180deg); }
+body::before { content: ''; position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; opacity: 0.12; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); background-size: 200px 200px; }
 body.theme-light { background: #f2f2f7 !important; color: #000000 !important; }
 body.theme-light .min-h-screen { background: #f2f2f7 !important; }
 body.theme-light .bg-zinc-950 { background: #f2f2f7 !important; }
@@ -189,6 +192,16 @@ export default function App() {
       db.loadIdeas(u.id),
       db.loadSettings(u.id),
     ])
+    // Подгружаем рефлексии из localStorage как резерв
+    if (!rf.length) {
+      const lsRefs = []
+      for (let i = 0; i < 30; i++) {
+        const d = new Date(); d.setDate(d.getDate() - i)
+        const key = 'wh:ref:' + d.toISOString().slice(0,10)
+        try { const v = localStorage.getItem(key); if (v) lsRefs.push(JSON.parse(v)) } catch {}
+      }
+      if (lsRefs.length) { setRef(lsRefs); }
+    }
     setHab(h); setLogs(l); setSk(sk); setRef(rf); setIdeas(id)
     if (set.quotes) setQ(set.quotes)
     if (set.affirm) setAf(set.affirm)
@@ -299,16 +312,20 @@ export default function App() {
         {toast && <Toast m={toast.m} a={toast.a} onX={() => setToast(null)} />}
         {achPop && <AchPop text={achPop} />}
 
-        {scr === 'home' && <Home {...p} onMenu={() => setMenu(true)} onH={goH} onSettings={id => { setEId(id); go('editH') }}
+        {scr === 'home' && <Home {...p} onMenu={() => setMenu(true)} onH={goH}
           onSkip={async (id, r) => { const s = { habitId: id, date: tk(), reason: r, ts: Date.now() }; if (user) await db.addSkip(user.id, s); setSk(p => [s, ...p]); addLogFn({ habitId: id, value: 0, note: r || 'Пропуск', ts: Date.now(), isSkip: true }); show('Пропуск') }}
           onUnplanned={async e => { const n = { ts: Date.now(), date: tk(), ...e }; setUp(p => [n, ...p]); show('Записано') }}
           onReflect={async r => {
             setRef(p => { const n = p.filter(x => x.date !== r.date); return [r, ...n] })
-            if (user) {
-              try { await db.saveReflection(user.id, r) } catch(e) { console.error('ref save:', e) }
-            }
-            // Также в localStorage как резерв
             try { localStorage.setItem('wh:ref:' + r.date, JSON.stringify(r)) } catch {}
+            if (user) {
+              try {
+                await supabase.from('reflections').upsert(
+                  { user_id: user.id, date: r.date, data: r.data },
+                  { onConflict: 'user_id,date' }
+                )
+              } catch(e) { console.error('ref save error:', e) }
+            }
           }}
           addLog={addLogFn} qkO={qkO} setQkO={setQkO}
           onAddIdea={async idea => {
@@ -539,7 +556,7 @@ function MStat({ l, v }) { return <div className="p-2 rounded-lg bg-zinc-800/30 
 function CirP({ value, color, size = 56 }) { const r = size * .42, c = 2 * Math.PI * r, off = c - Math.min(value, 1) * c, cx = size / 2; return <svg width={size} height={size} className="-rotate-90"><circle cx={cx} cy={cx} r={r} stroke="#27272a" strokeWidth="5" fill="none" /><circle cx={cx} cy={cx} r={r} stroke={color} strokeWidth="5" fill="none" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={off} style={{ transition: 'stroke-dashoffset .5s' }} /><text x={cx} y={cx} textAnchor="middle" dominantBaseline="central" className="fill-zinc-100 font-bold rotate-90" style={{ transformOrigin: `${cx}px ${cx}px`, fontSize: size * .22 }}>{Math.round(value * 100)}%</text></svg>; }
 
 /* ============ HOME ============ */
-function Home({ habits, logs, skips, tmrs, tick, quotes, quickIds, ideas, unplanned, onMenu, onH, onSkip, onUnplanned, reflections, refSections, onReflect, addLog, affirm, qkO, setQkO, onAddIdea, xp, onSettings }) {
+function Home({ habits, logs, skips, tmrs, tick, quotes, quickIds, ideas, unplanned, onMenu, onH, onSkip, onUnplanned, reflections, refSections, onReflect, addLog, affirm, qkO, setQkO, onAddIdea, xp }) {
   const today = tk(); const dow = mD(); const ts0 = new Date(); ts0.setHours(0, 0, 0, 0);
   const quoteList = Array.isArray(quotes) ? quotes : (typeof quotes === 'string' ? quotes.split('\n').filter(Boolean) : []); const quote = useMemo(() => quoteList[Math.floor(Math.random() * (quoteList.length || 1))] || '', []);
   const tH = useMemo(() => habits.filter(h => {
@@ -606,7 +623,7 @@ function Home({ habits, logs, skips, tmrs, tick, quotes, quickIds, ideas, unplan
 
       {Object.keys(tmrs).length > 0 && <div className="mb-3"><SH text="⏱ Идёт" />{Object.entries(tmrs).map(([hid, start]) => { const h = habits.find(x => x.id === hid); if (!h) return null; return <button key={hid} onClick={() => onH(hid)} className="w-full mb-1.5 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 flex items-center gap-3 active:scale-[0.98]"><span className="text-xl">{h.icon}</span><div className="flex-1 text-left"><div className="font-semibold">{h.name}</div><div className="text-amber-400 tabular-nums">{fmtEl(Math.floor((Date.now() - start) / 1000))}</div></div><div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" /></button>; })}</div>}
 
-      {['morning', 'day', 'evening', 'anytime'].map(g => grps[g].length > 0 && <div key={g} className="mb-3"><SH text={gl[g]} /><div className="space-y-1.5">{grps[g].map(h => <HRow key={h.id} h={h} logs={tL} tmrs={tmrs} onClick={() => onH(h.id)} onSettings={onSettings} />)}</div></div>)}
+      {['morning', 'day', 'evening', 'anytime'].map(g => grps[g].length > 0 && <div key={g} className="mb-3"><SH text={gl[g]} /><div className="space-y-1.5">{grps[g].map(h => <HRow key={h.id} h={h} logs={tL} tmrs={tmrs} onClick={() => onH(h.id)} />)}</div></div>)}
 
 
       <div className="mt-5 mb-4"><SH text="📝 Рефлексия" />
@@ -635,7 +652,7 @@ function Home({ habits, logs, skips, tmrs, tick, quotes, quickIds, ideas, unplan
           })}
         </div>
       </div>
-      {grps.done.length > 0 && <div className="mt-4 mb-3"><SH text="✅ Сделано" color="text-emerald-600/60" /><div className="space-y-1.5 opacity-50">{grps.done.map(h => <HRow key={h.id} h={h} logs={tL} tmrs={tmrs} onClick={() => onH(h.id)} done onSettings={onSettings} />)}</div></div>}
+      {grps.done.length > 0 && <div className="mt-4 mb-3"><SH text="✅ Сделано" color="text-emerald-600/60" /><div className="space-y-1.5 opacity-50">{grps.done.map(h => <HRow key={h.id} h={h} logs={tL} tmrs={tmrs} onClick={() => onH(h.id)} done />)}</div></div>}
     </div>
   );
 }
@@ -664,7 +681,7 @@ function HRow({ h, logs, tmrs, onClick, done, onSettings }) {
         <div className="flex items-center gap-2">
           {done ? <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400 text-sm">✓</div>
             : <div className="w-10 h-1.5 rounded-full bg-zinc-800 overflow-hidden"><div className="h-full rounded-full transition-all" style={{ width: `${pct * 100}%`, background: h.color }} /></div>}
-          {onSettings && <button onClick={e => { e.stopPropagation(); onSettings(h.id) }} className="w-7 h-7 rounded-lg bg-zinc-800/50 flex items-center justify-center text-zinc-600 active:scale-90">⚙️</button>}
+
         </div>
       </button>
     </div>
@@ -677,16 +694,16 @@ function MedPlayer() {
   const [selMin, setSelMin] = useState(15)
   const [customMin, setCustomMin] = useState('')
   const [running, setRunning] = useState(false)
-  const [remaining, setRemaining] = useState(15 * 60)
-  const [withMusic, setWithMusic] = useState(null)
+  const [withMusic, setWithMusic] = useState(false)
+  const [remaining, setRemaining] = useState(null)
   const audioRef = useRef(null)
   const timerRef = useRef(null)
 
-  const totalSec = (customMin ? parseInt(customMin) : selMin) * 60
+  const totalMin = customMin ? parseInt(customMin) || 15 : selMin
+  const totalSec = totalMin * 60
 
-  const start = (music) => {
-    const sec = (customMin ? parseInt(customMin) : selMin) * 60
-    setRemaining(sec)
+  const startMed = (music) => {
+    setRemaining(totalSec)
     setWithMusic(music)
     setRunning(true)
     if (music) {
@@ -699,77 +716,69 @@ function MedPlayer() {
 
   const stop = () => {
     setRunning(false)
-    setWithMusic(null)
+    setRemaining(null)
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
     clearInterval(timerRef.current)
-    setRemaining(totalSec)
   }
 
   useEffect(() => {
-    if (running) {
-      timerRef.current = setInterval(() => {
-        setRemaining(r => {
-          if (r <= 1) {
-            clearInterval(timerRef.current)
-            setRunning(false)
-            setWithMusic(null)
-            if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
-            return 0
-          }
-          return r - 1
-        })
-      }, 1000)
-    }
+    if (!running) return
+    timerRef.current = setInterval(() => {
+      setRemaining(r => {
+        if (r <= 1) { clearInterval(timerRef.current); setRunning(false); if (audioRef.current) { audioRef.current.pause(); audioRef.current = null } return 0 }
+        return r - 1
+      })
+    }, 1000)
     return () => clearInterval(timerRef.current)
   }, [running])
 
-  useEffect(() => () => {
-    if (audioRef.current) audioRef.current.pause()
-    clearInterval(timerRef.current)
-  }, [])
+  useEffect(() => () => { if (audioRef.current) audioRef.current.pause(); clearInterval(timerRef.current) }, [])
 
-  const h = Math.floor(remaining / 3600)
-  const m = Math.floor((remaining % 3600) / 60)
-  const s = remaining % 60
-  const pct = running ? (1 - remaining / totalSec) : 0
+  const rem = remaining ?? totalSec
+  const h = Math.floor(rem / 3600)
+  const m = Math.floor((rem % 3600) / 60)
+  const s = rem % 60
+  const pct = running && remaining !== null ? 1 - remaining / totalSec : 0
   const presets = [5, 10, 15, 20, 30]
 
   return (
     <div className="mb-4 p-5 rounded-2xl bg-purple-500/10 border border-purple-500/20">
       <div className="text-sm font-semibold text-purple-400 mb-4 text-center">🧘 Медитация</div>
 
-      {!running ? <>
-        <div className="flex gap-1.5 mb-3 flex-wrap justify-center">
-          {presets.map(p => <button key={p} onClick={() => { setSelMin(p); setCustomMin('') }} className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${selMin === p && !customMin ? 'bg-purple-500 text-white' : 'bg-zinc-800 text-zinc-400'}`}>{p} мин</button>)}
-        </div>
-        <div className="flex gap-2 mb-4">
-          <input type="number" value={customMin} onChange={e => setCustomMin(e.target.value)} placeholder="Свои минуты..." className="inp flex-1 text-center tabular-nums" min="1" max="180" />
-        </div>
-        <div className="text-3xl font-black text-center text-purple-300 mb-4 tabular-nums">
-          {String(Math.floor((customMin || selMin) * 60 / 60)).padStart(2,'0')}:{String((customMin || selMin) * 60 % 60).padStart(2,'0')}
-        </div>
-        <div className="flex gap-2">
-          <button onClick={() => start(true)} className="flex-1 p-3.5 rounded-xl bg-purple-500 text-white font-semibold active:scale-[0.98]">🔉 С музыкой</button>
-          <button onClick={() => start(false)} className="flex-1 p-3.5 rounded-xl bg-zinc-800 text-zinc-300 font-semibold active:scale-[0.98]">🔇 Без музыки</button>
-        </div>
-      </> : <>
-        <div className="text-center mb-4">
-          <div className="relative inline-flex items-center justify-center mb-3">
-            <svg width="160" height="160" className="-rotate-90">
-              <circle cx="80" cy="80" r="70" stroke="#3f3f46" strokeWidth="8" fill="none" />
-              <circle cx="80" cy="80" r="70" stroke="#a855f7" strokeWidth="8" fill="none" strokeLinecap="round" strokeDasharray={2*Math.PI*70} strokeDashoffset={2*Math.PI*70*(1-pct)} style={{transition:'stroke-dashoffset 1s linear'}} />
-            </svg>
-            <div className="absolute text-center">
-              <div className="text-4xl font-black tabular-nums text-purple-300">
-                {h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
-              </div>
-              <div className="text-xs text-zinc-500 mt-1">{withMusic ? '🔉 с музыкой' : '🔇 тишина'}</div>
-            </div>
+      <div className="flex gap-1.5 mb-3 flex-wrap justify-center">
+        {presets.map(p => (
+          <button key={p} onClick={() => { if (!running) { setSelMin(p); setCustomMin('') } }} className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${selMin === p && !customMin ? 'bg-purple-500 text-white' : 'bg-zinc-800 text-zinc-400'} ${running ? 'opacity-50 cursor-default' : ''}`}>{p} мин</button>
+        ))}
+      </div>
+      {!running && <div className="flex gap-2 mb-4">
+        <input type="number" value={customMin} onChange={e => setCustomMin(e.target.value)} placeholder="Свои минуты..." className="inp flex-1 text-center tabular-nums" min="1" max="180" />
+      </div>}
+
+      <div className="relative flex items-center justify-center mb-5">
+        <svg width="160" height="160" className="-rotate-90">
+          <circle cx="80" cy="80" r="70" stroke="#3f3f46" strokeWidth="6" fill="none" />
+          <circle cx="80" cy="80" r="70" stroke="#a855f7" strokeWidth="6" fill="none" strokeLinecap="round"
+            strokeDasharray={2*Math.PI*70}
+            strokeDashoffset={2*Math.PI*70*(1-pct)}
+            style={{transition:'stroke-dashoffset 1s linear'}} />
+        </svg>
+        <div className="absolute text-center">
+          <div className="text-4xl font-black tabular-nums text-purple-300">
+            {h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
           </div>
-          {remaining === 0 && <div className="text-emerald-400 font-semibold text-lg mb-2">✓ Медитация завершена!</div>}
+          {running && <div className="text-xs text-zinc-500 mt-1">{withMusic ? '🔉 с музыкой' : '🔇 тишина'}</div>}
+          {remaining === 0 && <div className="text-emerald-400 text-xs mt-1 font-semibold">✓ Готово!</div>}
         </div>
+      </div>
+
+      {!running ? (
+        <div className="flex gap-2">
+          <button onClick={() => startMed(true)} className="flex-1 p-3.5 rounded-xl bg-purple-500 text-white font-semibold active:scale-[0.98]">🔉 С музыкой</button>
+          <button onClick={() => startMed(false)} className="flex-1 p-3.5 rounded-xl bg-zinc-800 text-zinc-300 font-semibold active:scale-[0.98]">🔇 Без музыки</button>
+        </div>
+      ) : (
         <button onClick={stop} className="w-full p-3.5 rounded-xl bg-zinc-800 text-zinc-300 font-semibold active:scale-[0.98]">⏹ Остановить</button>
-      </>}
+      )}
     </div>
   )
 }
@@ -779,9 +788,8 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
   const [note, setNote] = useState(''); const [mv, setMv] = useState(''); const [skipR, setSkipR] = useState('');
   const [showSk, setShowSk] = useState(false); const [eN, setEN] = useState(''); const [eV, setEV] = useState('');
   const [affO, setAffO] = useState(false)
-  const [showAltDate, setShowAltDate] = useState(false)
-  const [altDate, setAltDate] = useState(tk())
-  const [altTime, setAltTime] = useState('')
+  const [altDate, setAltDate] = useState(() => tk())
+  const [altTime, setAltTime] = useState(() => { const n = new Date(); return n.getHours().toString().padStart(2,'0') + ':' + n.getMinutes().toString().padStart(2,'0') })
   const [bH, setBH] = useState('23'); const [bM, setBM] = useState('00');
   const [wH, setWH2] = useState('07'); const [wM, setWM] = useState('00');
   const [sleepQ, setSleepQ] = useState(0);
@@ -813,12 +821,16 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
   const maxC = Math.max(h.goalDay || 1, ...chart.map(d => d.value), 1);
   const qa = v => {
     let ts = Date.now()
-    if (showAltDate && altDate) {
-      const d = new Date(altDate + (altTime ? 'T' + altTime : 'T12:00'))
+    if (altDate) {
+      const d = new Date(altDate + 'T' + (altTime || '00:00'))
       if (!isNaN(d.getTime())) ts = d.getTime()
     }
-    addLog({ habitId: h.id, value: v, note, ts, localTime: altTime ? altDate + ' ' + altTime : undefined })
-    setNote(''); setMv(''); setShowAltDate(false); setAltDate(tk()); setAltTime('')
+    addLog({ habitId: h.id, value: v, note, ts, localTime: altDate + ' ' + altTime })
+    setNote(''); setMv('')
+    // Сбрасываем на текущее время
+    const n = new Date()
+    setAltDate(tk())
+    setAltTime(n.getHours().toString().padStart(2,'0') + ':' + n.getMinutes().toString().padStart(2,'0'))
   }
   const logSleep = () => { const bed = parseInt(bH) * 60 + parseInt(bM); const wk = parseInt(wH) * 60 + parseInt(wM); let d = wk - bed; if (d < 0) d += 1440; addLog({ habitId: h.id, value: Math.round(d / 60 * 10) / 10, note: `Лёг: ${bH}:${bM}, встал: ${wH}:${wM}${sleepQ > 0 ? `, качество: ${sleepQ}/5` : ''}`, sleepQuality: sleepQ }); };
 
@@ -889,7 +901,7 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
         {h.type === 'scale' && <div className="flex gap-2 items-center"><input type="number" step="0.1" value={mv} onChange={e => setMv(e.target.value)} placeholder={h.unit} className="inp flex-1 tabular-nums" /><button onClick={() => { if (mv) qa(parseFloat(mv)) }} className="flex-1 p-3.5 rounded-xl font-bold active:scale-[0.98]" style={{background: h.color + '20', color: h.color, border: '2px solid ' + h.color}}>Записать</button></div>}
       </div>
 
-      <div className="mb-4"><div className="flex gap-2 mb-2"><button onClick={() => setShowSk(!showSk)} className={`flex-1 text-xs px-3 py-2.5 rounded-xl border active:scale-95 ${showSk ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-zinc-700/50 text-zinc-500'}`}>😔 Не получилось</button></div>{showSk && <div className="mt-2 p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2"><p className="text-sm text-zinc-400">Ничего страшного, завтра получится лучше! 💪</p><input value={skipR} onChange={e => setSkipR(e.target.value)} placeholder="Что помешало? (необязательно)" className="inp" /><div className="flex gap-2"><button onClick={() => { onSkip(h.id, skipR || 'Пропуск'); setSkipR(''); setShowSk(false); }} className="flex-1 p-3 rounded-xl bg-zinc-800 text-zinc-300 font-semibold active:scale-[0.98]">Пропустить</button></div></div>}</div>
+      <div className="mb-4"><div className="flex gap-2 mb-2"><button onClick={() => setShowSk(!showSk)} className={`w-full text-xs px-3 py-2.5 rounded-xl border active:scale-95 ${showSk ? 'border-rose-500/50 text-rose-400 bg-rose-500/10' : 'border-zinc-700/50 text-zinc-500'}`}>😔 Не получилось сегодня?</button>{showSk && <div className="mt-2 p-3 rounded-xl bg-zinc-900 border border-zinc-800 space-y-2"><p className="text-sm text-zinc-400">Ничего страшного, завтра получится лучше! 💪</p><input value={skipR} onChange={e => setSkipR(e.target.value)} placeholder="Что помешало? (необязательно)" className="inp" /><div className="flex gap-2"><button onClick={() => { onSkip(h.id, skipR || 'Пропуск'); setSkipR(''); setShowSk(false); }} className="flex-1 p-3 rounded-xl bg-zinc-800 text-zinc-300 font-semibold active:scale-[0.98]">Пропустить</button></div></div>}</div>
 
       <div className="mb-4 p-3 rounded-2xl bg-zinc-900/50 border border-zinc-800"><SH text="Последние 7 дней" /><div className="flex items-end gap-1 h-12">{chart.map((d, i) => <div key={i} className="flex-1 flex flex-col items-center gap-0.5"><div className="flex-1 w-full flex items-end"><div className="w-full rounded-t transition-all" style={{ height: d.count > 0 ? `${Math.max((d.value / maxC) * 100, 15)}%` : "3px", background: d.count > 0 ? (d.isToday ? h.color : `${h.color}bb`) : "#27272a", opacity: d.count > 0 ? 1 : 0.3 }} /></div><div className={`text-[9px] tabular-nums ${d.isToday ? 'text-zinc-300 font-bold' : 'text-zinc-600'}`}>{d.day}</div></div>)}</div></div>
 
@@ -1625,6 +1637,100 @@ function HelpScr({ onBack }) {
   )
 }
 
+
+/* ============ ВСЯ ИСТОРИЯ ============ */
+function HistoryScr({ logs, habits, skips, onBack }) {
+  const days = 7
+  const now = new Date(); now.setHours(0,0,0,0)
+  const allDays = Array.from({ length: days }, (_, i) => {
+    const d = new Date(now.getTime() - i * 86400000)
+    const dateStr = d.toISOString().slice(0,10)
+    return {
+      date: dateStr,
+      label: i === 0 ? 'Сегодня' : i === 1 ? 'Вчера' : d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'short' })
+    }
+  })
+  return (
+    <div className="max-w-md mx-auto px-4 pb-12">
+      <div className="pt-5 pb-3 flex items-center gap-3">
+        <button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button>
+        <h1 className="font-bold flex-1">📚 Вся история</h1>
+      </div>
+      {logs.length === 0 && <div className="text-center py-8 text-zinc-500">Записей пока нет</div>}
+      {allDays.map(({ date, label }) => {
+        const dayLogs = (logs || []).filter(l => {
+          try { return new Date(l.ts).toISOString().slice(0,10) === date && !l.isSkip } catch { return false }
+        })
+        const daySkips = (skips || []).filter(s => s.date === date)
+        if (!dayLogs.length && !daySkips.length) return null
+        return (
+          <div key={date} className="mb-4">
+            <SH text={label} />
+            <div className="space-y-1.5">
+              {dayLogs.map(l => {
+                const h = (habits || []).find(x => x.id === l.habitId)
+                return (
+                  <div key={l.ts} className="p-3 rounded-xl bg-zinc-900/50 border border-zinc-800/40 flex items-center gap-3">
+                    <span className="text-lg">{h?.icon || '📌'}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm">{l.habitName || h?.name || l.habitId}</div>
+                      <div className="text-xs text-zinc-500 tabular-nums">{fmtV(l.value)} {l.habitUnit || h?.unit || ''}{l.note ? ` · ${l.note}` : ''}</div>
+                    </div>
+                    <div className="text-xs text-zinc-600 tabular-nums">{new Date(l.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</div>
+                  </div>
+                )
+              })}
+              {daySkips.map((s, i) => {
+                const h = (habits || []).find(x => x.id === s.habitId)
+                return (
+                  <div key={i} className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/15 flex items-center gap-3">
+                    <span className="text-lg">{h?.icon || '❌'}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm text-rose-400">{h?.name || s.habitId} — пропуск</div>
+                      {s.reason && <div className="text-xs text-zinc-500">{s.reason}</div>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+
+/* ============ НАСТРОЙКИ ============ */
+function SettingsScr({ onBack, theme, onToggleTheme }) {
+  return (
+    <div className="max-w-md mx-auto px-4 pb-12">
+      <div className="pt-5 pb-3 flex items-center gap-3">
+        <button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button>
+        <h1 className="font-bold flex-1">⚙️ Настройки</h1>
+      </div>
+      <div className="space-y-3">
+        <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800">
+          <div className="flex items-center justify-between">
+            <div><div className="font-semibold">🌗 Тема</div><div className="text-sm text-zinc-500 mt-0.5">{theme === 'dark' ? 'Тёмная' : 'Светлая'}</div></div>
+            <button onClick={onToggleTheme} className={`w-14 h-7 rounded-full transition-all relative ${theme === 'light' ? 'bg-violet-500' : 'bg-zinc-700'}`}>
+              <div className={`w-5 h-5 rounded-full bg-white absolute top-1 transition-all ${theme === 'light' ? 'left-8' : 'left-1'}`} />
+            </button>
+          </div>
+        </div>
+        <div className="p-4 rounded-2xl bg-zinc-900/50 border border-zinc-800">
+          <div className="font-semibold mb-2">📱 Добавить на экран телефона</div>
+          <div className="text-sm text-zinc-400 space-y-1">
+            <div className="font-medium text-zinc-300">iPhone (Safari):</div>
+            <div>Поделиться → На экран Домой → Добавить</div>
+            <div className="font-medium text-zinc-300 mt-2">Android (Chrome):</div>
+            <div>⋮ → Добавить на главный экран → Добавить</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
 function Feedback({ onBack, show, user }) {
   const [theme, setTheme] = useState('Предложение')
   const [msg, setMsg] = useState('')
