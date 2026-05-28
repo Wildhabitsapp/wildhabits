@@ -470,11 +470,10 @@ function AccordionMenu({ groups, go }) {
 }
 
 function MenuOvl({ onClose, go, undo, onUndo, logs = [], habits = [], avatar, userName }) {
-  const lv = getLevel(xp);
   const groups = [
     { title: '📋 Главное', items: [
       { i: '🏠', l: 'Привычки дня', s: 'home' },
-      { i: '📋', l: 'Настроить привычки', s: 'allHabits' },
+      { i: '📋', l: 'Все привычки', s: 'allHabits' },
       { i: '📅', l: 'План', s: 'plan' },
       { i: '⚡', l: 'Быстрые записи', s: 'qkS' },
     ]},
@@ -515,7 +514,7 @@ function MenuOvl({ onClose, go, undo, onUndo, logs = [], habits = [], avatar, us
           <div className="grid grid-cols-3 gap-2 text-center">
             <div><div className="text-lg font-black text-violet-400">{logs.filter(l=>!l.isSkip).length}</div><div className="text-[10px] text-zinc-500">записей</div></div>
             <div><div className="text-lg font-black text-emerald-400">{habits.filter(h=>!h.archived).length}</div><div className="text-[10px] text-zinc-500">привычек</div></div>
-            <div><div className="text-lg font-black text-amber-400">{Math.max(...habits.map(h=>calcStr(logs.filter(l=>l.habitId===h.id),h)),0)}🔥</div><div className="text-[10px] text-zinc-500">лучшая серия</div></div>
+            <div><div className="text-lg font-black text-amber-400">{(() => { try { return Math.max(...habits.map(h => { try { return calcStr(logs.filter(l=>l.habitId===h.id), h) } catch { return 0 } }), 0) } catch { return 0 } })()}🔥</div><div className="text-[10px] text-zinc-500">лучшая серия</div></div>
           </div>
         </div>
         <AccordionMenu groups={groups} go={go} />
@@ -684,17 +683,15 @@ function HRow({ h, logs, tmrs, onClick, done, onSettings }) {
   const hL = logs.filter(l => l.habitId === h.id && !l.isSkip)
   const v = sumH(hL, h); const ac = !!tmrs[h.id]
   const pct = h.goalDay > 0 && h.dir === 'up' ? Math.min(v / h.goalDay, 1) : (v > 0 ? 1 : 0)
-  const freqLabel = {daily:'Каждый день', weekly:'Раз в нед', monthly:'Раз в мес', custom:'По дням'}[h.period] || ''
-  const timeLabel = {morning:'Утро', day:'День', evening:'Вечер', anytime:'Весь день'}[h.time] || ''
+
   return (
     <div className={`w-full rounded-2xl bg-zinc-900/50 border border-zinc-800/60 overflow-hidden ${ac ? 'ring-1 ring-amber-500/40' : ''}`}>
       <button onClick={onClick} className="w-full p-3.5 flex items-center gap-3 active:scale-[0.98] text-left">
         <div className="text-xl w-8 flex items-center justify-center">{h.icon}</div>
         <div className="flex-1 min-w-0">
           <div className="font-semibold truncate">{h.name}</div>
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+          <div className="flex items-center gap-2 mt-0.5">
             <span className="text-xs text-zinc-500 tabular-nums">{fmtV(v)} / {h.goalDay} {h.unit}</span>
-            {!done && <><span className="text-zinc-700">·</span><span className="text-xs text-zinc-600">{freqLabel}</span><span className="text-zinc-700">·</span><span className="text-xs text-zinc-600">{timeLabel}</span></>}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -881,6 +878,12 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
         <div className="flex-1 min-w-0"><h1 className="font-bold truncate">{h.name}</h1><div className="text-sm text-zinc-500">{h.cat}</div></div>
         {onEditHabit && <button onClick={() => onEditHabit(h.id)} className="text-zinc-500 active:scale-90 p-1 text-xl">⚙️</button>}
       </div>
+      <div className="mb-3 px-1 flex items-center gap-3 flex-wrap">
+        <span className="text-xs text-zinc-600">{{'daily':'Каждый день','weekly':'Раз в нед','monthly':'Раз в мес','custom':'По дням'}[h.period] || ''}</span>
+        <span className="text-zinc-800">·</span>
+        <span className="text-xs text-zinc-600">{{'morning':'🌅 Утро','day':'☀️ День','evening':'🌙 Вечер','anytime':'⏳ Весь день'}[h.time] || ''}</span>
+        {h.cat && <><span className="text-zinc-800">·</span><span className="text-xs text-zinc-600">{h.cat}</span></>}
+      </div>
       {h.why && <div className="mb-3 px-1"><div className="text-sm text-zinc-500 leading-relaxed italic">{h.why}</div></div>}
 
       <div className="mb-3 p-5 rounded-2xl bg-gradient-to-br from-zinc-900/80 to-zinc-900/30 border border-zinc-800">
@@ -950,7 +953,7 @@ function AllH({ habits, onBack, onH, onEdit, onDel, onAdd, onArch }) {
   const gd = CATS.map(c => ({ c, items: list.filter(h => h.cat === c) })).filter(g => g.items.length > 0);
   return (
     <div className="max-w-md mx-auto px-4 pb-12">
-      <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">📋 Настроить привычки</h1><button onClick={onAdd} className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center active:scale-95 text-emerald-400 text-xl">+</button></div>
+      <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">📋 Все привычки</h1><button onClick={onAdd} className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center active:scale-95 text-emerald-400 text-xl">+</button></div>
       <div className="flex gap-2 mb-4"><button onClick={() => setTab('active')} className={`flex-1 py-2.5 rounded-lg font-semibold ${tab === 'active' ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-900 text-zinc-400'}`}>Активные</button><button onClick={() => setTab('archive')} className={`flex-1 py-2.5 rounded-lg font-semibold ${tab === 'archive' ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-900 text-zinc-400'}`}>Архив</button></div>
       {gd.map(g => <div key={g.c} className="mb-4"><SH text={g.c} /><div className="space-y-1.5">{g.items.map(h => <div key={h.id} className="p-3.5 rounded-xl bg-zinc-900/50 border border-zinc-800/60 flex items-center gap-3"><button onClick={() => onH(h.id)} className="flex-1 flex items-center gap-3 text-left"><span className="text-xl">{h.icon}</span><div className="min-w-0"><div className="font-semibold truncate">{h.name}</div><div className="text-sm text-zinc-500">{FRQ.find(f => f.v === h.period)?.l}</div></div></button><button onClick={() => onArch(h.id)} className="text-zinc-600 p-1.5">📦</button><button onClick={() => onEdit(h.id)} className="text-zinc-600 p-1.5">✏️</button><button onClick={() => onDel(h.id)} className="text-zinc-600 hover:text-rose-400 p-1.5">🗑</button></div>)}</div></div>)}
       {gd.length === 0 && <div className="text-center py-8 text-zinc-600">{tab === 'archive' ? 'Архив пуст' : 'Нет активных'}</div>}
