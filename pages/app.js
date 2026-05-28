@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import * as db from '../lib/db'
 
 
-const V = 'v4.8';
+const V = 'v4.9';
 const S = k => `wh:${k}`;
 const DR = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 const mD = (d = new Date()) => { const v = d.getDay(); return v === 0 ? 6 : v - 1; };
@@ -192,16 +192,18 @@ export default function App() {
       db.loadIdeas(u.id),
       db.loadSettings(u.id),
     ])
-    // Подгружаем рефлексии из localStorage как резерв
-    if (!rf.length) {
-      const lsRefs = []
-      for (let i = 0; i < 30; i++) {
-        const d = new Date(); d.setDate(d.getDate() - i)
-        const key = 'wh:ref:' + d.toISOString().slice(0,10)
-        try { const v = localStorage.getItem(key); if (v) lsRefs.push(JSON.parse(v)) } catch {}
-      }
-      if (lsRefs.length) { setRef(lsRefs); }
+    // Мержим Supabase + localStorage (берём более свежие данные)
+    const lsRefs = []
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(); d.setDate(d.getDate() - i)
+      const key = 'wh:ref:' + d.toISOString().slice(0,10)
+      try { const v = localStorage.getItem(key); if (v) lsRefs.push(JSON.parse(v)) } catch {}
     }
+    const merged = [...rf]
+    lsRefs.forEach(lr => {
+      if (!merged.find(r => r.date === lr.date)) merged.push(lr)
+    })
+    if (merged.length > rf.length) setRef(merged)
     setHab(h); setLogs(l); setSk(sk); setRef(rf); setIdeas(id)
     if (set.quotes) setQ(set.quotes)
     if (set.affirm) setAf(set.affirm)
@@ -279,10 +281,14 @@ export default function App() {
 
   if (!rdy) return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-      <style>{CSS}</style>
+      <style>{CSS}
+        @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(0.95)} }
+        .logo-pulse { animation: pulse 1.5s ease-in-out infinite; }
+        @keyframes dots { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} }
+      </style>
       <div className="text-center">
-        <div className="text-4xl font-black text-violet-500 mb-2">WH</div>
-        <div className="text-zinc-500">Загрузка...</div>
+        <img src="/logo.png" alt="WH" className="h-20 w-auto mx-auto mb-4 logo-pulse" />
+        <div className="text-zinc-500 text-sm">Загрузка...</div>
       </div>
     </div>
   )
@@ -308,7 +314,7 @@ export default function App() {
       </Head>
       <div className="min-h-screen bg-zinc-950 text-zinc-100">
         <style>{CSS}</style>
-        {menu && <MenuOvl onClose={() => setMenu(false)} go={go} undo={undo} onUndo={undoAct} xp={xp} avatar={typeof window !== 'undefined' ? localStorage.getItem('wh:avatar') : null} userName={typeof window !== 'undefined' ? (localStorage.getItem('wh:name') || user?.email?.split('@')[0]) : user?.email?.split('@')[0]} />}
+        {menu && <MenuOvl onClose={() => setMenu(false)} go={go} undo={undo} onUndo={undoAct} logs={logs} habits={actH} avatar={typeof window !== 'undefined' ? localStorage.getItem('wh:avatar') : null} userName={typeof window !== 'undefined' ? (localStorage.getItem('wh:name') || user?.email?.split('@')[0]) : user?.email?.split('@')[0]} />}
         {toast && <Toast m={toast.m} a={toast.a} onX={() => setToast(null)} />}
         {achPop && <AchPop text={achPop} />}
 
@@ -316,15 +322,19 @@ export default function App() {
           onSkip={async (id, r) => { const s = { habitId: id, date: tk(), reason: r, ts: Date.now() }; if (user) await db.addSkip(user.id, s); setSk(p => [s, ...p]); addLogFn({ habitId: id, value: 0, note: r || 'Пропуск', ts: Date.now(), isSkip: true }); show('Пропуск') }}
           onUnplanned={async e => { const n = { ts: Date.now(), date: tk(), ...e }; setUp(p => [n, ...p]); show('Записано') }}
           onReflect={async r => {
-            setRef(p => { const n = p.filter(x => x.date !== r.date); return [r, ...n] })
-            try { localStorage.setItem('wh:ref:' + r.date, JSON.stringify(r)) } catch {}
+            // Обновляем только если это новые данные
+            setRef(p => {
+              const existing = p.find(x => x.date === r.date)
+              const n = p.filter(x => x.date !== r.date)
+              return [r, ...n]
+            })
             if (user) {
               try {
                 await supabase.from('reflections').upsert(
                   { user_id: user.id, date: r.date, data: r.data },
                   { onConflict: 'user_id,date' }
                 )
-              } catch(e) { console.error('ref save error:', e) }
+              } catch(e) { console.error('ref save:', e) }
             }
           }}
           addLog={addLogFn} qkO={qkO} setQkO={setQkO}
@@ -463,7 +473,7 @@ function AccordionMenu({ groups, go }) {
   )
 }
 
-function MenuOvl({ onClose, go, undo, onUndo, xp, avatar, userName }) {
+function MenuOvl({ onClose, go, undo, onUndo, logs = [], habits = [], avatar, userName }) {
   const lv = getLevel(xp);
   const groups = [
     { title: '📋 Главное', items: [
@@ -506,8 +516,11 @@ function MenuOvl({ onClose, go, undo, onUndo, xp, avatar, userName }) {
           <button onClick={onClose} className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center">✕</button>
         </div>
         <div className="mb-4 p-3 rounded-xl bg-zinc-800/50 border border-zinc-700/50">
-          <div className="flex items-center gap-2"><span className="text-xl">{lv.icon}</span><div><div className="font-bold text-sm">{lv.name}</div><div className="text-xs text-zinc-400">{xp} XP{lv.next ? ` · до ${lv.next.name}: ${lv.next.min - xp}` : ''}</div></div></div>
-          {lv.next && <div className="mt-2 h-1.5 rounded-full bg-zinc-700 overflow-hidden"><div className="h-full rounded-full bg-violet-500 transition-all" style={{ width: `${((xp - lv.min) / (lv.next.min - lv.min)) * 100}%` }} /></div>}
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div><div className="text-lg font-black text-violet-400">{logs.filter(l=>!l.isSkip).length}</div><div className="text-[10px] text-zinc-500">записей</div></div>
+            <div><div className="text-lg font-black text-emerald-400">{habits.filter(h=>!h.archived).length}</div><div className="text-[10px] text-zinc-500">привычек</div></div>
+            <div><div className="text-lg font-black text-amber-400">{Math.max(...habits.map(h=>calcStr(logs.filter(l=>l.habitId===h.id),h)),0)}🔥</div><div className="text-[10px] text-zinc-500">лучшая серия</div></div>
+          </div>
         </div>
         <AccordionMenu groups={groups} go={go} />
         {undo.length > 0 && <button onClick={() => { onUndo(); onClose(); }} className="w-full mt-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-2 text-amber-400 font-medium active:scale-[0.98]"><span>↩</span> Отменить последнее удаление</button>}
@@ -579,14 +592,16 @@ function Home({ habits, logs, skips, tmrs, tick, quotes, quickIds, ideas, unplan
 
   const uR = (secId, idx, key, val) => {
     setR(prev => {
-      const d = { ...(prev.data || {}) }
+      const d = JSON.parse(JSON.stringify(prev.data || {}))
       if (!d[secId]) d[secId] = {}
       if (!d[secId][key]) d[secId][key] = []
       const arr = [...(d[secId][key] || [])]
       arr[idx] = val
       d[secId] = { ...d[secId], [key]: arr }
       const next = { ...prev, data: d }
-      // Сохраняем немедленно
+      // Сохраняем в localStorage немедленно (синхронно)
+      try { localStorage.setItem('wh:ref:' + next.date, JSON.stringify(next)) } catch {}
+      // Отправляем в Supabase асинхронно
       onReflect(next)
       return next
     })
@@ -613,6 +628,14 @@ function Home({ habits, logs, skips, tmrs, tick, quotes, quickIds, ideas, unplan
       {qkO === 'idea' && <QkPanel color="amber" icon="💡" title="Идея"><input value={ideaTxt} onChange={e => setIdeaTxt(e.target.value)} placeholder="Запишите идею..." className="inp" /><div className="flex gap-2 mt-2"><input value={ideaCat} onChange={e => setIdeaCat(e.target.value)} placeholder="Категория" className="inp flex-1" /><div className="flex gap-1">{['low','medium','high'].map(p => <button key={p} onClick={() => setIdeaPri(p)} className={`w-10 h-10 rounded-lg flex items-center justify-center ${ideaPri === p ? 'ring-2 ring-zinc-400' : ''} bg-zinc-800`}>{pIcons[p]}</button>)}</div></div><button onClick={() => { if (ideaTxt) { onAddIdea({ text: ideaTxt, category: ideaCat, priority: ideaPri }); setIdeaTxt(''); setIdeaCat(''); setQkO(null); } }} className="w-full mt-2 p-3 rounded-xl bg-zinc-100 text-zinc-900 font-semibold active:scale-[0.98]">Записать</button></QkPanel>}
       {qkO === 'unplanned' && <QkPanel color="zinc" icon="📋" title="Без плана"><p className="text-xs text-zinc-500 mb-2">Запись попадёт в раздел «Вся история»</p><input value={upN} onChange={e => setUpN(e.target.value)} placeholder="Что делали?" className="inp" /><input type="number" value={upM} onChange={e => setUpM(e.target.value)} placeholder="Минут" className="inp mt-2 tabular-nums" /><button onClick={() => { if (upN) { onUnplanned({ name: upN, minutes: parseFloat(upM) || 0 }); setUpN(''); setUpM(''); setQkO(null); } }} className="w-full mt-2 p-3 rounded-xl bg-zinc-100 text-zinc-900 font-semibold active:scale-[0.98]">Записать</button></QkPanel>}
       {qkO === 'H08' && <QkPanel color="yellow" icon="⚡" title="Энергия"><div className="grid grid-cols-5 gap-2">{[1, 2, 3, 4, 5].map(n => { const c = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#10b981'][n - 1]; return <button key={n} onClick={() => { addLog({ habitId: 'H08', value: n, note: '' }); setQkO(null); }} className="aspect-square rounded-xl border-2 active:scale-95 font-bold text-xl flex items-center justify-center" style={{ borderColor: c, color: c }}>{n}</button>; })}</div></QkPanel>}
+      {qkO && !['H02','idea','unplanned','H08'].includes(qkO) && (() => {
+        const qH = habits.find(h => h.id === qkO)
+        if (!qH) return null
+        if (qH.type === 'check') return <QkPanel color="violet" icon={qH.icon} title={qH.name}><button onClick={() => { addLog({ habitId: qkO, value: 1, note: '' }); setQkO(null); }} className="w-full p-4 rounded-xl font-bold text-lg active:scale-[0.98]" style={{background: qH.color+'20', color: qH.color, border:'2px solid '+qH.color}}>✓ Сделано</button></QkPanel>
+        if (qH.type === 'count') return <QkPanel color="violet" icon={qH.icon} title={qH.name}><div className="flex gap-2">{[1,3,10].map(n => <button key={n} onClick={() => { addLog({ habitId: qkO, value: n, note: '' }); setQkO(null); }} className="flex-1 p-3 rounded-xl bg-zinc-800 font-bold active:scale-95">{n}</button>)}<input type="number" placeholder={qH.unit} className="inp flex-1 tabular-nums" onKeyDown={e => { if(e.key==='Enter'&&e.target.value){addLog({habitId:qkO,value:parseFloat(e.target.value),note:''});setQkO(null)}}} /></div></QkPanel>
+        if (qH.type === 'rating') return <QkPanel color="violet" icon={qH.icon} title={qH.name}><div className="grid grid-cols-5 gap-2">{[1,2,3,4,5].map(n => { const c=['#ef4444','#f97316','#eab308','#84cc16','#10b981'][n-1]; return <button key={n} onClick={() => { addLog({habitId:qkO,value:n,note:''});setQkO(null); }} className="aspect-square rounded-xl border-2 font-bold text-xl flex items-center justify-center active:scale-95" style={{borderColor:c,color:c}}>{n}</button> })}</div></QkPanel>
+        return null
+      })()}
 
       <div className="mt-2 mb-3 px-2"><p className="text-zinc-500 italic text-center leading-relaxed" style={{ fontSize: 'clamp(12px,3vw,14px)' }}>{quote}</p></div>
 
@@ -691,32 +714,36 @@ function HRow({ h, logs, tmrs, onClick, done, onSettings }) {
 
 /* ============ MEDITATION PLAYER ============ */
 function MedPlayer() {
-  const [selMin, setSelMin] = useState(15)
-  const [customMin, setCustomMin] = useState('')
+  const [minutes, setMinutes] = useState(15)
+  const [seconds, setSeconds] = useState(0)
+  const [editMin, setEditMin] = useState(false)
+  const [editSec, setEditSec] = useState(false)
+  const [inputMin, setInputMin] = useState('15')
   const [running, setRunning] = useState(false)
   const [withMusic, setWithMusic] = useState(false)
   const [remaining, setRemaining] = useState(null)
   const audioRef = useRef(null)
   const timerRef = useRef(null)
 
-  const totalMin = customMin ? parseInt(customMin) || 15 : selMin
-  const totalSec = totalMin * 60
+  const totalSec = minutes * 60 + seconds
+  const rem = remaining ?? totalSec
+  const remMin = Math.floor(rem / 60)
+  const remSec = rem % 60
+  const pct = running && remaining !== null && totalSec > 0 ? 1 - remaining / totalSec : 0
 
   const startMed = (music) => {
-    setRemaining(totalSec)
-    setWithMusic(music)
-    setRunning(true)
+    const t = minutes * 60 + seconds
+    if (t <= 0) return
+    setRemaining(t); setWithMusic(music); setRunning(true)
     if (music) {
       const audio = new Audio('/meditation.mp3')
-      audio.loop = true
-      audioRef.current = audio
+      audio.loop = true; audioRef.current = audio
       audio.play().catch(() => {})
     }
   }
 
   const stop = () => {
-    setRunning(false)
-    setRemaining(null)
+    setRunning(false); setRemaining(null)
     if (audioRef.current) { audioRef.current.pause(); audioRef.current = null }
     clearInterval(timerRef.current)
   }
@@ -734,43 +761,52 @@ function MedPlayer() {
 
   useEffect(() => () => { if (audioRef.current) audioRef.current.pause(); clearInterval(timerRef.current) }, [])
 
-  const rem = remaining ?? totalSec
-  const h = Math.floor(rem / 3600)
-  const m = Math.floor((rem % 3600) / 60)
-  const s = rem % 60
-  const pct = running && remaining !== null ? 1 - remaining / totalSec : 0
-  const presets = [5, 10, 15, 20, 30]
+  const applyMin = () => {
+    const v = Math.max(0, Math.min(180, parseInt(inputMin) || 0))
+    setMinutes(v); setEditMin(false); setInputMin(String(v))
+  }
 
   return (
     <div className="mb-4 p-5 rounded-2xl bg-purple-500/10 border border-purple-500/20">
       <div className="text-sm font-semibold text-purple-400 mb-4 text-center">🧘 Медитация</div>
-
-      <div className="flex gap-1.5 mb-3 flex-wrap justify-center">
-        {presets.map(p => (
-          <button key={p} onClick={() => { if (!running) { setSelMin(p); setCustomMin('') } }} className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${selMin === p && !customMin ? 'bg-purple-500 text-white' : 'bg-zinc-800 text-zinc-400'} ${running ? 'opacity-50 cursor-default' : ''}`}>{p} мин</button>
-        ))}
-      </div>
-      {!running && <div className="flex gap-2 mb-4">
-        <input type="number" value={customMin} onChange={e => setCustomMin(e.target.value)} placeholder="Свои минуты..." className="inp flex-1 text-center tabular-nums" min="1" max="180" />
-      </div>}
-
       <div className="relative flex items-center justify-center mb-5">
-        <svg width="160" height="160" className="-rotate-90">
-          <circle cx="80" cy="80" r="70" stroke="#3f3f46" strokeWidth="6" fill="none" />
-          <circle cx="80" cy="80" r="70" stroke="#a855f7" strokeWidth="6" fill="none" strokeLinecap="round"
-            strokeDasharray={2*Math.PI*70}
-            strokeDashoffset={2*Math.PI*70*(1-pct)}
+        <svg width="180" height="180" className="-rotate-90">
+          <circle cx="90" cy="90" r="80" stroke="#3f3f46" strokeWidth="7" fill="none" />
+          <circle cx="90" cy="90" r="80" stroke="#a855f7" strokeWidth="7" fill="none" strokeLinecap="round"
+            strokeDasharray={2*Math.PI*80} strokeDashoffset={2*Math.PI*80*(1-pct)}
             style={{transition:'stroke-dashoffset 1s linear'}} />
         </svg>
         <div className="absolute text-center">
-          <div className="text-4xl font-black tabular-nums text-purple-300">
-            {h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`}
-          </div>
-          {running && <div className="text-xs text-zinc-500 mt-1">{withMusic ? '🔉 с музыкой' : '🔇 тишина'}</div>}
+          {editMin && !running ? (
+            <div className="flex flex-col items-center gap-1">
+              <input autoFocus type="number" value={inputMin} onChange={e => setInputMin(e.target.value)}
+                onBlur={applyMin} onKeyDown={e => e.key==='Enter' && applyMin()}
+                className="w-20 text-center text-2xl font-black bg-transparent border-b-2 border-purple-400 outline-none text-purple-300 tabular-nums" min="0" max="180" />
+              <div className="text-xs text-zinc-500">мин (0-180)</div>
+            </div>
+          ) : (
+            <div className="flex items-end justify-center gap-1">
+              <button onClick={() => { if (!running) { setEditMin(true); setInputMin(String(remMin)) } }} className={`text-5xl font-black tabular-nums text-purple-300 leading-none ${!running ? 'active:opacity-70' : ''}`}>
+                {String(remMin).padStart(2,'0')}
+              </button>
+              <span className="text-3xl font-black text-purple-500 leading-none mb-1">:</span>
+              {editSec && !running ? (
+                <select autoFocus value={remSec} onChange={e => { setSeconds(parseInt(e.target.value)); setEditSec(false) }}
+                  onBlur={() => setEditSec(false)}
+                  className="text-4xl font-black bg-transparent text-purple-300 outline-none tabular-nums">
+                  {Array.from({length:60},(_,i) => <option key={i} value={i}>{String(i).padStart(2,'0')}</option>)}
+                </select>
+              ) : (
+                <button onClick={() => { if (!running) setEditSec(true) }} className={`text-4xl font-black tabular-nums text-purple-300 leading-none ${!running ? 'active:opacity-70' : ''}`}>
+                  {String(remSec).padStart(2,'0')}
+                </button>
+              )}
+            </div>
+          )}
+          {running && <div className="text-xs text-zinc-500 mt-2">{withMusic ? '🔉 с музыкой' : '🔇 тишина'}</div>}
           {remaining === 0 && <div className="text-emerald-400 text-xs mt-1 font-semibold">✓ Готово!</div>}
         </div>
       </div>
-
       {!running ? (
         <div className="flex gap-2">
           <button onClick={() => startMed(true)} className="flex-1 p-3.5 rounded-xl bg-purple-500 text-white font-semibold active:scale-[0.98]">🔉 С музыкой</button>
@@ -945,7 +981,14 @@ function EditH({ habit, onBack, onSave }) {
           </div>
           <div className="text-xs text-zinc-600 mt-1 px-1">Нажмите на поле иконки и выберите эмодзи</div>
         </Fld>
-        <Fld l="Категория"><Sel opts={CATS.map(c => ({ v: c, l: c }))} val={f.cat} onCh={v => u('cat', v)} /></Fld>
+        <Fld l="Категория">
+          <div className="flex gap-1.5 mb-1.5">
+            {['Здоровье','Ментальное','Отношения'].map(c => <button key={c} onClick={() => u('cat', c)} className={`flex-1 py-2 rounded-lg text-xs font-medium ${f.cat === c ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-800 text-zinc-400'}`}>{c}</button>)}
+          </div>
+          <div className="flex gap-1.5">
+            {['Работа','Обучение','Контент','Вредные'].map(c => <button key={c} onClick={() => u('cat', c)} className={`flex-1 py-2 rounded-lg text-xs font-medium ${f.cat === c ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-800 text-zinc-400'}`}>{c}</button>)}
+          </div>
+        </Fld>
         <Fld l="Тип"><Sel opts={TYP} val={f.type} onCh={v => u('type', v)} /></Fld>
         <Fld l="Единица">
           <div className="flex flex-wrap gap-1.5 mb-2">
@@ -962,7 +1005,7 @@ function EditH({ habit, onBack, onSave }) {
           </div>
         </Fld>
         <Fld l="Направление"><Sel opts={[{ v: 'up', l: 'Больше ↑' }, { v: 'down', l: 'Меньше ↓' }]} val={f.dir} onCh={v => u('dir', v)} /></Fld>
-        <Fld l="Время дня"><Sel opts={TOD} val={f.time} onCh={v => u('time', v)} /></Fld>
+        <Fld l="Время дня"><div className="flex gap-1.5">{TOD.map(o => <button key={o.v} onClick={() => u('time', o.v)} className={`flex-1 py-2 rounded-lg text-xs font-medium ${f.time === o.v ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-800 text-zinc-400'}`}>{o.l}</button>)}</div></Fld>
         <Fld l="Частота">
           <div className="flex flex-wrap gap-1.5">
             {[{v:'daily',l:'Каждый день'},{v:'weekly',l:'Дни недели'},{v:'monthly',l:'Числа месяца'}].map(o =>
@@ -1477,6 +1520,8 @@ function QkSet({ habits, quickIds, onBack, onSave }) {
 function Acct({ user, onBack, onOut }) {
   const [avatar, setAvatar] = useState(() => localStorage.getItem('wh:avatar') || '')
   const [displayName, setDisplayName] = useState(() => localStorage.getItem('wh:name') || user?.email?.split('@')[0] || '')
+  const [birthDate, setBirthDate] = useState(() => localStorage.getItem('wh:birth') || '')
+  const [gender, setGender] = useState(() => localStorage.getItem('wh:gender') || '')
   const fileRef = useRef(null)
 
   const onFile = (e) => {
@@ -1519,6 +1564,16 @@ function Acct({ user, onBack, onOut }) {
           <div>
             <div className="text-xs text-zinc-500 mb-1">Имя</div>
             <input value={displayName} onChange={e => setDisplayName(e.target.value)} onBlur={() => { localStorage.setItem('wh:name', displayName) }} className="inp" placeholder="Ваше имя" />
+          </div>
+          <div>
+            <div className="text-xs text-zinc-500 mb-1">Дата рождения</div>
+            <input type="date" value={birthDate} onChange={e => { setBirthDate(e.target.value); localStorage.setItem('wh:birth', e.target.value) }} className="inp" />
+          </div>
+          <div>
+            <div className="text-xs text-zinc-500 mb-1.5">Пол</div>
+            <div className="flex gap-2">
+              {['Мужской','Женский'].map(g => <button key={g} onClick={() => { setGender(g); localStorage.setItem('wh:gender', g) }} className={`flex-1 py-2.5 rounded-lg font-medium ${gender === g ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-800 text-zinc-400'}`}>{g === 'Мужской' ? '👨 ' : '👩 '}{g}</button>)}
+            </div>
           </div>
           <div><div className="text-xs text-zinc-500 mb-1">Email</div><div className="text-zinc-300">{user.email}</div></div>
         </div>
@@ -1635,6 +1690,149 @@ function HelpScr({ onBack }) {
 
 
 /* ============ ВСЯ ИСТОРИЯ ============ */
+
+/* ============ СОБЫТИЯ ============ */
+function EventsScr({ onBack, user, show }) {
+  const [events, setEvents] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [adding, setAdding] = useState(false)
+  const [editing, setEditing] = useState(null)
+  const emptyForm = { name: '', icon: '📅', date: '', time: '00:00', repeats: false, units: ['years','months','days'] }
+  const [form, setForm] = useState(emptyForm)
+  const upd = (k, v) => setForm(f => ({...f, [k]: v}))
+  const togUnit = u => upd('units', form.units.includes(u) ? form.units.filter(x => x !== u) : [...form.units, u])
+
+  const UNIT_OPTS = [
+    {v:'years',l:'Лет'},{v:'months',l:'Месяцев'},{v:'weeks',l:'Недель'},
+    {v:'days',l:'Дней'},{v:'hours',l:'Часов'},{v:'minutes',l:'Минут'}
+  ]
+
+  useEffect(() => {
+    if (!user) { setLoading(false); return }
+    supabase.from('events').select('*').eq('user_id', user.id).order('date')
+      .then(({ data, error }) => {
+        if (error) console.error('events load:', error)
+        setEvents(data || [])
+        setLoading(false)
+      })
+  }, [user?.id])
+
+  const calcDiff = (ev) => {
+    try {
+      const now = new Date()
+      let target = new Date((ev.date || '2000-01-01') + 'T' + (ev.time || '00:00'))
+      if (isNaN(target.getTime())) return { text: '—', isPast: false }
+      if (ev.repeats_yearly) {
+        target.setFullYear(now.getFullYear())
+        if (target < now) target.setFullYear(now.getFullYear() + 1)
+      }
+      const diff = target - now
+      const isPast = diff < 0
+      const abs = Math.abs(diff)
+      const totalDays = Math.floor(abs / 86400000)
+      const totalWeeks = Math.floor(totalDays / 7)
+      const totalMonths = Math.floor(totalDays / 30.44)
+      const totalYears = Math.floor(totalDays / 365.25)
+      const totalHours = Math.floor(abs / 3600000)
+      const totalMin = Math.floor(abs / 60000)
+      const units = ev.units || ['years','months','days']
+      const parts = []
+      if (units.includes('years') && totalYears > 0) parts.push(totalYears + ' ' + (totalYears === 1 ? 'год' : totalYears < 5 ? 'года' : 'лет'))
+      if (units.includes('months')) { const m = totalMonths % 12; if (m > 0) parts.push(m + ' мес') }
+      if (units.includes('weeks') && !units.includes('years')) parts.push(totalWeeks + ' нед')
+      if (units.includes('days')) { const d = totalDays % 30; if (d > 0 || parts.length === 0) parts.push((d || totalDays) + ' дн') }
+      if (units.includes('hours') && !units.includes('days')) parts.push((totalHours % 24) + ' ч')
+      if (units.includes('minutes') && !units.includes('hours')) parts.push((totalMin % 60) + ' мин')
+      return { text: parts.join(' ') || '0 дн', isPast }
+    } catch { return { text: '—', isPast: false } }
+  }
+
+  const save = async () => {
+    if (!form.name || !form.date || !user) return
+    const payload = { user_id: user.id, name: form.name, icon: form.icon || '📅', date: form.date, time: form.time || '00:00', repeats_yearly: form.repeats, units: form.units }
+    if (editing) {
+      const { data, error } = await supabase.from('events').update(payload).eq('id', editing).select().single()
+      if (error) { show('Ошибка: ' + error.message); return }
+      if (data) setEvents(p => p.map(e => e.id === editing ? data : e))
+      show('Обновлено ✓'); setEditing(null)
+    } else {
+      const { data, error } = await supabase.from('events').insert(payload).select().single()
+      if (error) { show('Ошибка: ' + error.message); return }
+      if (data) setEvents(p => [...p, data])
+      show('Событие добавлено ✓')
+    }
+    setForm(emptyForm); setAdding(false)
+  }
+
+  const startEdit = ev => {
+    setForm({ name: ev.name || '', icon: ev.icon || '📅', date: ev.date || '', time: ev.time || '00:00', repeats: ev.repeats_yearly || false, units: ev.units || ['years','months','days'] })
+    setEditing(ev.id); setAdding(true)
+  }
+
+  const del = async id => {
+    await supabase.from('events').delete().eq('id', id)
+    setEvents(p => p.filter(e => e.id !== id)); show('Удалено')
+  }
+
+  return (
+    <div className="max-w-md mx-auto px-4 pb-12">
+      <div className="pt-5 pb-3 flex items-center gap-3">
+        <button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button>
+        <h1 className="font-bold flex-1">📅 События</h1>
+        <button onClick={() => { setForm(emptyForm); setEditing(null); setAdding(!adding) }} className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 text-xl active:scale-95">{adding ? '✕' : '+'}</button>
+      </div>
+
+      {adding && (
+        <div className="mb-4 p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3">
+          <div className="text-sm font-semibold text-zinc-400">{editing ? 'Редактировать' : 'Новое событие'}</div>
+          <div className="flex gap-2">
+            <input value={form.icon} onChange={e => upd('icon', e.target.value)} className="inp text-center text-2xl" style={{width:52}} maxLength={4} />
+            <input value={form.name} onChange={e => upd('name', e.target.value)} placeholder="Название" className="inp flex-1" />
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1"><div className="text-xs text-zinc-500 mb-1">Дата</div><input type="date" value={form.date} onChange={e => upd('date', e.target.value)} className="inp w-full" style={{fontSize:'13px'}} /></div>
+            <div><div className="text-xs text-zinc-500 mb-1">Время</div><TimeScroller hour={form.time.split(':')[0]} minute={form.time.split(':')[1]} onHour={h => upd('time', h+':'+form.time.split(':')[1])} onMinute={m => upd('time', form.time.split(':')[0]+':'+m)} /></div>
+          </div>
+          <button onClick={() => upd('repeats', !form.repeats)} className={`w-full p-3 rounded-xl border text-sm font-medium text-left ${form.repeats ? 'bg-violet-500/10 border-violet-500/30 text-violet-400' : 'bg-zinc-800 border-zinc-700 text-zinc-400'}`}>
+            🔄 Повторяется каждый год {form.repeats ? '✓' : ''}<div className="text-xs mt-0.5 opacity-70">Дни рождения, годовщины</div>
+          </button>
+          <div>
+            <div className="text-xs text-zinc-500 mb-1.5">Показывать:</div>
+            <div className="flex flex-wrap gap-1.5">
+              {UNIT_OPTS.map(u => <button key={u.v} onClick={() => togUnit(u.v)} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${form.units.includes(u.v) ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'bg-zinc-800 text-zinc-500'}`}>{u.l}</button>)}
+            </div>
+          </div>
+          <button onClick={save} className="btn-primary bg-emerald-500 text-zinc-950 active:scale-[0.98]">{editing ? 'Сохранить' : 'Добавить'}</button>
+        </div>
+      )}
+
+      {loading && <div className="text-center py-8 text-zinc-500">Загрузка...</div>}
+      {!loading && events.length === 0 && <div className="text-center py-10 text-zinc-500"><div className="text-4xl mb-3">📅</div><div className="font-medium mb-1">Нет событий</div><div className="text-sm">Добавьте важные даты — свадьба, день рождения, бросил курить...</div></div>}
+
+      <div className="space-y-3">
+        {events.map(ev => {
+          const { text, isPast } = calcDiff(ev)
+          return (
+            <div key={ev.id} className="rounded-2xl border border-zinc-800 overflow-hidden" style={{background:'linear-gradient(135deg,#3730a315 0%,#1e1b4b10 100%)'}}>
+              <div className="p-4">
+                <div className="flex items-start gap-2 mb-2">
+                  <div><div className="font-bold flex items-center gap-2">{ev.icon} {ev.name}{ev.repeats_yearly && <span className="text-[10px] text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded-full">ежегодно</span>}</div><div className="text-xs text-zinc-500 mt-0.5">{ev.date ? new Date(ev.date+'T12:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'}) : ''}</div></div>
+                </div>
+                <div className="text-3xl font-black tabular-nums" style={{color: isPast ? '#10b981' : '#f59e0b'}}>{text}</div>
+                <div className="text-sm text-zinc-500">{isPast ? '— прошло' : '— осталось'}</div>
+              </div>
+              <div className="flex border-t border-zinc-800/40">
+                <button onClick={() => startEdit(ev)} className="flex-1 py-2.5 text-xs text-zinc-500 font-medium active:bg-zinc-800">✏️ Изменить</button>
+                <button onClick={() => del(ev.id)} className="flex-1 py-2.5 text-xs text-rose-400 font-medium active:bg-zinc-800 border-l border-zinc-800/40">🗑 Удалить</button>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function HistoryScr({ logs, habits, skips, onBack }) {
   const days = 7
   const now = new Date(); now.setHours(0,0,0,0)
