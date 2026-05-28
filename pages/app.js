@@ -281,11 +281,7 @@ export default function App() {
 
   if (!rdy) return (
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center">
-      <style>{CSS}
-        @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.6;transform:scale(0.95)} }
-        .logo-pulse { animation: pulse 1.5s ease-in-out infinite; }
-        @keyframes dots { 0%{content:'.'} 33%{content:'..'} 66%{content:'...'} }
-      </style>
+      <style>{CSS + `@keyframes wh-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.6;transform:scale(0.95)}}.logo-pulse{animation:wh-pulse 1.5s ease-in-out infinite}`}</style>
       <div className="text-center">
         <img src="/logo.png" alt="WH" className="h-20 w-auto mx-auto mb-4 logo-pulse" />
         <div className="text-zinc-500 text-sm">Загрузка...</div>
