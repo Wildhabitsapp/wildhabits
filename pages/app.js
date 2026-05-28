@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase'
 import * as db from '../lib/db'
 
 
-const V = 'v4.9';
+const V = 'v5.0';
 const S = k => `wh:${k}`;
 const DR = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 const mD = (d = new Date()) => { const v = d.getDay(); return v === 0 ? 6 : v - 1; };
@@ -345,7 +345,7 @@ export default function App() {
           eLTs={eLTs} setELTs={setELTs} habits={habits}
           setHab={async h => { setHab(h); if (user) for (const hab of h) await db.saveHabit(user.id, hab) }} />}
 
-        {scr === 'allHabits' && <AllH habits={habits} onBack={() => go('home')} onH={goH}
+        {scr === 'allHabits' && <AllH habits={habits} logs={logs} onBack={() => go('home')} onH={goH}
           onEdit={id => { setEId(id); go('editH') }}
           onDel={async id => { const h = habits.find(x => x.id === id); if (h) setUndo(u => [{ type: 'habit', data: h }, ...u.slice(0, 19)]); if (user) await db.deleteHabit(user.id, id); setHab(p => p.filter(x => x.id !== id)); show('Удалено', () => undoAct()) }}
           onAdd={() => { setEId(null); go('editH') }}
@@ -474,7 +474,6 @@ function MenuOvl({ onClose, go, undo, onUndo, logs = [], habits = [], avatar, us
     { title: '📋 Главное', items: [
       { i: '🏠', l: 'Привычки дня', s: 'home' },
       { i: '📋', l: 'Все привычки', s: 'allHabits' },
-      { i: '📅', l: 'План', s: 'plan' },
       { i: '⚡', l: 'Быстрые записи', s: 'qkS' },
     ]},
     { title: '📊 Аналитика', items: [
@@ -492,7 +491,6 @@ function MenuOvl({ onClose, go, undo, onUndo, logs = [], habits = [], avatar, us
     { title: '⚙️ Настройки', items: [
       { i: '👤', l: 'Аккаунт', s: 'acct' },
       { i: '⚙️', l: 'Настройки', s: 'settings' },
-      { i: '📤', l: 'Экспорт', s: 'exp' },
       { i: '📤', l: 'Экспорт', s: 'exp' },
       { i: '❓', l: 'О приложении', s: 'help' },
       { i: '💌', l: 'Обратная связь', s: 'feedback' },
@@ -634,6 +632,29 @@ function Home({ habits, logs, skips, tmrs, tick, quotes, quickIds, ideas, unplan
 
       <div className="mt-2 mb-3 px-2"><p className="text-zinc-500 italic text-center leading-relaxed" style={{ fontSize: 'clamp(12px,3vw,14px)' }}>{quote}</p></div>
 
+      {(() => {
+        // Баннеры напоминаний о событиях
+        const todayStr = tk()
+        const banners = (typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('wh:events_cache') || '[]') : []).filter(ev => {
+          if (!ev.reminders?.length || !ev.date) return false
+          const evDate = new Date(ev.date + 'T12:00')
+          const now2 = new Date(); now2.setHours(0,0,0,0)
+          const daysLeft = Math.ceil((evDate - now2) / 86400000)
+          if (ev.repeats_yearly) {
+            const thisYear = new Date(now2.getFullYear() + '-' + ev.date.slice(5) + 'T12:00')
+            const dl = Math.ceil((thisYear - now2) / 86400000)
+            return (ev.reminders.includes('week') && dl === 7) || (ev.reminders.includes('day') && dl === 1) || (ev.reminders.includes('same') && dl === 0)
+          }
+          return (ev.reminders.includes('week') && daysLeft === 7) || (ev.reminders.includes('day') && daysLeft === 1) || (ev.reminders.includes('same') && daysLeft === 0)
+        })
+        return banners.map((ev, i) => (
+          <div key={i} className="mb-2 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-2">
+            <span className="text-lg">{ev.icon}</span>
+            <div className="flex-1 text-sm"><span className="font-semibold">{ev.name}</span> — {ev.reminders.includes('same') ? 'сегодня!' : ev.reminders.includes('day') ? 'завтра' : 'через неделю'}</div>
+            <span className="text-amber-400">🔔</span>
+          </div>
+        ))
+      })()}
       <div className="mb-4 p-4 rounded-2xl bg-gradient-to-br from-zinc-900/80 to-zinc-900/30 border border-zinc-800">
         <div className="flex items-center justify-between mb-2"><span className="text-zinc-400">Прогресс</span><span className="font-bold tabular-nums">{done}/{total} · {pct}%</span></div>
         <div className="h-2.5 rounded-full bg-zinc-800 overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all duration-700" style={{ width: `${pct}%` }} /></div>
@@ -878,13 +899,10 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
         <div className="flex-1 min-w-0"><h1 className="font-bold truncate">{h.name}</h1><div className="text-sm text-zinc-500">{h.cat}</div></div>
         {onEditHabit && <button onClick={() => onEditHabit(h.id)} className="text-zinc-500 active:scale-90 p-1 text-xl">⚙️</button>}
       </div>
-      <div className="mb-3 px-1 flex items-center gap-3 flex-wrap">
-        <span className="text-xs text-zinc-600">{{'daily':'Каждый день','weekly':'Раз в нед','monthly':'Раз в мес','custom':'По дням'}[h.period] || ''}</span>
-        <span className="text-zinc-800">·</span>
-        <span className="text-xs text-zinc-600">{{'morning':'🌅 Утро','day':'☀️ День','evening':'🌙 Вечер','anytime':'⏳ Весь день'}[h.time] || ''}</span>
-        {h.cat && <><span className="text-zinc-800">·</span><span className="text-xs text-zinc-600">{h.cat}</span></>}
+      <div className="mb-3 px-1">
+        <div className="text-xs text-zinc-600">{h.cat}{h.period ? ' · ' + {'daily':'Каждый день','weekly':'Раз в нед','monthly':'Раз в мес','custom':'По дням'}[h.period] : ''}{h.time ? ' · ' + {'morning':'Утро','day':'День','evening':'Вечер','anytime':'Весь день'}[h.time] : ''}</div>
+        {h.why && <div className="text-sm text-zinc-500 leading-relaxed italic mt-0.5">{h.why}</div>}
       </div>
-      {h.why && <div className="mb-3 px-1"><div className="text-sm text-zinc-500 leading-relaxed italic">{h.why}</div></div>}
 
       <div className="mb-3 p-5 rounded-2xl bg-gradient-to-br from-zinc-900/80 to-zinc-900/30 border border-zinc-800">
         <div className="flex items-center justify-between mb-3">
@@ -902,11 +920,11 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
       {h.id === 'H05' && <MedPlayer />}
 
       <div className="mb-3"><SH text="Записать" />
-        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Заметка..." className="inp mb-2" />
         <div className="flex gap-2 mb-2 items-center">
           <input type="date" value={altDate} onChange={e => setAltDate(e.target.value)} className="inp flex-1" style={{minWidth:90, fontSize:'13px'}} />
           <TimeScroller hour={altTime.split(':')[0]} minute={altTime.split(':')[1]} onHour={hv => setAltTime(hv + ':' + (altTime.split(':')[1] || '00'))} onMinute={mv2 => setAltTime((altTime.split(':')[0] || '00') + ':' + mv2)} />
         </div>
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="Заметка..." className="inp mb-2" />
 
         {h.type === 'sleep' && <div className="p-4 rounded-2xl bg-zinc-900 border border-zinc-800 space-y-3"><TimeScroller hour={bH} minute={bM} onHour={setBH} onMinute={setBM} label="🌙 Лёг" />
                 <TimeScroller hour={wH} minute={wM} onHour={setWH2} onMinute={setWM} label="☀️ Встал" /><div><div className="text-sm text-zinc-400 mb-1.5">Качество сна</div><div className="grid grid-cols-5 gap-2">{[1,2,3,4,5].map(n => { const c = ['#ef4444','#f97316','#eab308','#84cc16','#10b981'][n-1]; return <button key={n} onClick={() => setSleepQ(n)} className={`py-2.5 rounded-lg border-2 font-bold ${sleepQ === n ? 'text-white' : ''}`} style={{ borderColor: c, color: c, background: sleepQ === n ? c + '33' : 'transparent' }}>{n}</button>; })}</div></div><button onClick={logSleep} className="btn-primary bg-indigo-500 text-white active:scale-[0.98]">Записать сон</button></div>}
@@ -947,18 +965,105 @@ function Detail({ habit: h, logs, timer, tick, affirm, onBack, addLog, delLog, u
 }
 
 /* ============ ALL HABITS ============ */
-function AllH({ habits, onBack, onH, onEdit, onDel, onAdd, onArch }) {
-  const [tab, setTab] = useState('active');
-  const list = tab === 'active' ? habits.filter(h => !h.archived) : habits.filter(h => h.archived);
-  const gd = CATS.map(c => ({ c, items: list.filter(h => h.cat === c) })).filter(g => g.items.length > 0);
+function AllH({ habits, onBack, onH, onEdit, onDel, onAdd, onArch, logs }) {
+  const [tab, setTab] = useState('active')
+  const [sort, setSort] = useState('cat')
+  const [showPlan, setShowPlan] = useState(false)
+  const list = tab === 'active' ? habits.filter(h => !h.archived) : habits.filter(h => h.archived)
+
+  const SORTS = [
+    { v: 'cat', l: 'По категории' },
+    { v: 'time', l: 'По времени' },
+    { v: 'freq', l: 'По частоте' },
+    { v: 'type', l: 'По типу' },
+    { v: 'dir', l: 'По цели' },
+    { v: 'plan', l: 'По плану' },
+  ]
+
+  const getGroup = (h) => {
+    if (sort === 'cat') return h.cat || 'Прочее'
+    if (sort === 'time') return { morning: '🌅 Утро', day: '☀️ День', evening: '🌙 Вечер', anytime: '⏳ Весь день' }[h.time] || 'Прочее'
+    if (sort === 'freq') return { daily: '📆 Каждый день', weekly: '📅 Раз в неделю', monthly: '🗓 Раз в месяц', custom: '⚙️ Особые дни' }[h.period] || 'Прочее'
+    if (sort === 'type') return { duration: '⏱ Длительность', count: '🔢 Счётчик', check: '✅ Галочка', rating: '⭐ Оценка', scale: '📏 Число', sleep: '😴 Сон' }[h.type] || 'Прочее'
+    if (sort === 'dir') return h.dir === 'up' ? '📈 Больше — лучше' : '📉 Меньше — лучше'
+    if (sort === 'plan') {
+      const dow = mD()
+      const planned = h.period === 'daily' || (h.period === 'weekly' && (h.days || []).includes(dow)) || (h.period === 'monthly' && (h.days || []).includes(new Date().getDate() - 1)) || (h.period === 'custom' && (h.days || []).includes(dow))
+      return planned ? '✅ Запланировано на сегодня' : '📋 Не на сегодня'
+    }
+    return 'Прочее'
+  }
+
+  const grouped = useMemo(() => {
+    const map = {}
+    list.forEach(h => {
+      const g = getGroup(h)
+      if (!map[g]) map[g] = []
+      map[g].push(h)
+    })
+    return map
+  }, [list, sort])
+
+  // Порядок групп
+  const groupOrder = {
+    cat: CATS,
+    time: ['🌅 Утро', '☀️ День', '🌙 Вечер', '⏳ Весь день'],
+    freq: ['📆 Каждый день', '📅 Раз в неделю', '🗓 Раз в месяц', '⚙️ Особые дни'],
+    type: ['⏱ Длительность', '🔢 Счётчик', '✅ Галочка', '⭐ Оценка', '📏 Число', '😴 Сон'],
+    dir: ['📈 Больше — лучше', '📉 Меньше — лучше'],
+    plan: ['✅ Запланировано на сегодня', '📋 Не на сегодня'],
+  }
+  const order = groupOrder[sort] || []
+  const sortedGroups = [
+    ...order.filter(k => grouped[k]),
+    ...Object.keys(grouped).filter(k => !order.includes(k))
+  ]
+
   return (
     <div className="max-w-md mx-auto px-4 pb-12">
-      <div className="pt-5 pb-3 flex items-center gap-3"><button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button><h1 className="font-bold flex-1">📋 Все привычки</h1><button onClick={onAdd} className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center active:scale-95 text-emerald-400 text-xl">+</button></div>
-      <div className="flex gap-2 mb-4"><button onClick={() => setTab('active')} className={`flex-1 py-2.5 rounded-lg font-semibold ${tab === 'active' ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-900 text-zinc-400'}`}>Активные</button><button onClick={() => setTab('archive')} className={`flex-1 py-2.5 rounded-lg font-semibold ${tab === 'archive' ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-900 text-zinc-400'}`}>Архив</button></div>
-      {gd.map(g => <div key={g.c} className="mb-4"><SH text={g.c} /><div className="space-y-1.5">{g.items.map(h => <div key={h.id} className="p-3.5 rounded-xl bg-zinc-900/50 border border-zinc-800/60 flex items-center gap-3"><button onClick={() => onH(h.id)} className="flex-1 flex items-center gap-3 text-left"><span className="text-xl">{h.icon}</span><div className="min-w-0"><div className="font-semibold truncate">{h.name}</div><div className="text-sm text-zinc-500">{FRQ.find(f => f.v === h.period)?.l}</div></div></button><button onClick={() => onArch(h.id)} className="text-zinc-600 p-1.5">📦</button><button onClick={() => onEdit(h.id)} className="text-zinc-600 p-1.5">✏️</button><button onClick={() => onDel(h.id)} className="text-zinc-600 hover:text-rose-400 p-1.5">🗑</button></div>)}</div></div>)}
-      {gd.length === 0 && <div className="text-center py-8 text-zinc-600">{tab === 'archive' ? 'Архив пуст' : 'Нет активных'}</div>}
+      <div className="pt-5 pb-3 flex items-center gap-3">
+        <button onClick={onBack} className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center active:scale-95">←</button>
+        <h1 className="font-bold flex-1">📋 Все привычки</h1>
+        <button onClick={onAdd} className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center active:scale-95 text-emerald-400 text-xl">+</button>
+      </div>
+
+      <div className="flex gap-2 mb-3">
+        <button onClick={() => setTab('active')} className={`flex-1 py-2.5 rounded-lg font-semibold ${tab === 'active' ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-900 text-zinc-400'}`}>Активные</button>
+        <button onClick={() => setTab('archive')} className={`flex-1 py-2.5 rounded-lg font-semibold ${tab === 'archive' ? 'bg-zinc-100 text-zinc-900' : 'bg-zinc-900 text-zinc-400'}`}>Архив</button>
+      </div>
+
+      <div className="mb-3">
+        <div className="text-xs text-zinc-500 mb-1.5 font-semibold px-1">Сортировка</div>
+        <div className="flex flex-wrap gap-1.5">
+          {SORTS.map(s => <button key={s.v} onClick={() => setSort(s.v)} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${sort === s.v ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'bg-zinc-800 text-zinc-400'}`}>{s.l}</button>)}
+        </div>
+      </div>
+
+      {sort === 'plan' && <Plan habits={habits.filter(h=>!h.archived)} logs={logs} onBack={() => setSort('cat')} embedded />}
+
+      {sort !== 'plan' && <>
+        {sortedGroups.length === 0 && <div className="text-center py-8 text-zinc-600">{tab === 'archive' ? 'Архив пуст' : 'Нет активных'}</div>}
+        {sortedGroups.map(g => (
+          <div key={g} className="mb-4">
+            <SH text={g} />
+            <div className="space-y-1.5">
+              {(grouped[g] || []).map(h => (
+                <div key={h.id} className="p-3.5 rounded-xl bg-zinc-900/50 border border-zinc-800/60 flex items-center gap-3">
+                  <button onClick={() => onH(h.id)} className="flex-1 flex items-center gap-3 text-left">
+                    <span className="text-xl">{h.icon}</span>
+                    <div className="min-w-0"><div className="font-semibold truncate">{h.name}</div><div className="text-xs text-zinc-500">{h.cat} · {FRQ.find(f => f.v === h.period)?.l}</div></div>
+                  </button>
+                  <button onClick={() => onArch(h.id)} className="text-zinc-600 p-1.5 active:scale-90">📦</button>
+                  <button onClick={() => onEdit(h.id)} className="text-zinc-600 p-1.5 active:scale-90">✏️</button>
+                  <button onClick={() => onDel(h.id)} className="text-zinc-600 p-1.5 active:scale-90">🗑</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </>}
     </div>
-  );
+  )
 }
 
 /* ============ EDIT HABIT ============ */
@@ -1566,7 +1671,15 @@ function Acct({ user, onBack, onOut }) {
           </div>
           <div>
             <div className="text-xs text-zinc-500 mb-1">Дата рождения</div>
-            <input type="date" value={birthDate} onChange={e => { setBirthDate(e.target.value); localStorage.setItem('wh:birth', e.target.value) }} className="inp" />
+            <div className="flex items-center gap-2">
+              <input type="date" value={birthDate} onChange={e => { setBirthDate(e.target.value); localStorage.setItem('wh:birth', e.target.value) }} className="inp" style={{maxWidth:160}} />
+              {birthDate && (() => {
+                const b = new Date(birthDate), n = new Date()
+                const y = n.getFullYear() - b.getFullYear() - (n < new Date(n.getFullYear(), b.getMonth(), b.getDate()) ? 1 : 0)
+                const m = ((n.getMonth() - b.getMonth()) + 12) % 12
+                return <span className="text-sm text-violet-400 font-semibold">{y} лет {m} мес</span>
+              })()}
+            </div>
           </div>
           <div>
             <div className="text-xs text-zinc-500 mb-1.5">Пол</div>
@@ -1696,7 +1809,7 @@ function EventsScr({ onBack, user, show }) {
   const [loading, setLoading] = useState(true)
   const [adding, setAdding] = useState(false)
   const [editing, setEditing] = useState(null)
-  const emptyForm = { name: '', icon: '📅', date: '', time: '00:00', repeats: false, units: ['years','months','days'] }
+  const emptyForm = { name: '', icon: '📅', date: '', time: '00:00', repeats: false, units: ['years','months','days'], reminders: [] }
   const [form, setForm] = useState(emptyForm)
   const upd = (k, v) => setForm(f => ({...f, [k]: v}))
   const togUnit = u => upd('units', form.units.includes(u) ? form.units.filter(x => x !== u) : [...form.units, u])
@@ -1711,7 +1824,9 @@ function EventsScr({ onBack, user, show }) {
     supabase.from('events').select('*').eq('user_id', user.id).order('date')
       .then(({ data, error }) => {
         if (error) console.error('events load:', error)
-        setEvents(data || [])
+        const evData = data || []
+        setEvents(evData)
+        localStorage.setItem('wh:events_cache', JSON.stringify(evData))
         setLoading(false)
       })
   }, [user?.id])
@@ -1728,27 +1843,30 @@ function EventsScr({ onBack, user, show }) {
       const diff = target - now
       const isPast = diff < 0
       const abs = Math.abs(diff)
-      const totalDays = Math.floor(abs / 86400000)
+      const totalMs = abs
+      const totalSecs = Math.floor(totalMs / 1000)
+      const totalMins = Math.floor(totalSecs / 60)
+      const totalHours = Math.floor(totalMins / 60)
+      const totalDays = Math.floor(totalHours / 24)
       const totalWeeks = Math.floor(totalDays / 7)
       const totalMonths = Math.floor(totalDays / 30.44)
       const totalYears = Math.floor(totalDays / 365.25)
-      const totalHours = Math.floor(abs / 3600000)
-      const totalMin = Math.floor(abs / 60000)
       const units = ev.units || ['years','months','days']
       const parts = []
-      if (units.includes('years') && totalYears > 0) parts.push(totalYears + ' ' + (totalYears === 1 ? 'год' : totalYears < 5 ? 'года' : 'лет'))
-      if (units.includes('months')) { const m = totalMonths % 12; if (m > 0) parts.push(m + ' мес') }
-      if (units.includes('weeks') && !units.includes('years')) parts.push(totalWeeks + ' нед')
-      if (units.includes('days')) { const d = totalDays % 30; if (d > 0 || parts.length === 0) parts.push((d || totalDays) + ' дн') }
-      if (units.includes('hours') && !units.includes('days')) parts.push((totalHours % 24) + ' ч')
-      if (units.includes('minutes') && !units.includes('hours')) parts.push((totalMin % 60) + ' мин')
-      return { text: parts.join(' ') || '0 дн', isPast }
+      // Показываем ВСЕ выбранные единицы независимо друг от друга
+      if (units.includes('years')) parts.push(totalYears + ' ' + (totalYears === 1 ? 'год' : totalYears < 5 ? 'года' : 'лет'))
+      if (units.includes('months')) { const m = totalMonths % 12; parts.push(m + ' мес') }
+      if (units.includes('weeks')) { const w = totalWeeks % 4; parts.push(w + ' нед') }
+      if (units.includes('days')) { const d = totalDays % 7; parts.push(d + ' дн') }
+      if (units.includes('hours')) { const h = totalHours % 24; parts.push(h + ' ч') }
+      if (units.includes('minutes')) { const m = totalMins % 60; parts.push(m + ' мин') }
+      return { text: parts.length ? parts.join(' ') : '0 дн', isPast }
     } catch { return { text: '—', isPast: false } }
   }
 
   const save = async () => {
     if (!form.name || !form.date || !user) return
-    const payload = { user_id: user.id, name: form.name, icon: form.icon || '📅', date: form.date, time: form.time || '00:00', repeats_yearly: form.repeats, units: form.units }
+    const payload = { user_id: user.id, name: form.name, icon: form.icon || '📅', date: form.date, time: form.time || '00:00', repeats_yearly: form.repeats, units: form.units, reminders: form.reminders || [] }
     if (editing) {
       const { data, error } = await supabase.from('events').update(payload).eq('id', editing).select().single()
       if (error) { show('Ошибка: ' + error.message); return }
@@ -1757,14 +1875,18 @@ function EventsScr({ onBack, user, show }) {
     } else {
       const { data, error } = await supabase.from('events').insert(payload).select().single()
       if (error) { show('Ошибка: ' + error.message); return }
-      if (data) setEvents(p => [...p, data])
+      if (data) {
+        const newEvs = [...events, data]
+        setEvents(newEvs)
+        localStorage.setItem('wh:events_cache', JSON.stringify(newEvs))
+      }
       show('Событие добавлено ✓')
     }
     setForm(emptyForm); setAdding(false)
   }
 
   const startEdit = ev => {
-    setForm({ name: ev.name || '', icon: ev.icon || '📅', date: ev.date || '', time: ev.time || '00:00', repeats: ev.repeats_yearly || false, units: ev.units || ['years','months','days'] })
+    setForm({ name: ev.name || '', icon: ev.icon || '📅', date: ev.date || '', time: ev.time || '00:00', repeats: ev.repeats_yearly || false, units: ev.units || ['years','months','days'], reminders: ev.reminders || [] })
     setEditing(ev.id); setAdding(true)
   }
 
@@ -1801,7 +1923,19 @@ function EventsScr({ onBack, user, show }) {
               {UNIT_OPTS.map(u => <button key={u.v} onClick={() => togUnit(u.v)} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${form.units.includes(u.v) ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'bg-zinc-800 text-zinc-500'}`}>{u.l}</button>)}
             </div>
           </div>
-          <button onClick={save} className="btn-primary bg-emerald-500 text-zinc-950 active:scale-[0.98]">{editing ? 'Сохранить' : 'Добавить'}</button>
+          <div>
+            <div className="text-xs text-zinc-500 mb-1.5">🔔 Напоминания</div>
+            <div className="flex flex-wrap gap-1.5">
+              {[{v:'week',l:'За неделю'},{v:'day',l:'За день'},{v:'same',l:'В этот день'}].map(r => (
+                <button key={r.v} onClick={() => upd('reminders', form.reminders?.includes(r.v) ? form.reminders.filter(x=>x!==r.v) : [...(form.reminders||[]),r.v])}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium ${(form.reminders||[]).includes(r.v) ? 'bg-violet-500/20 text-violet-400 border border-violet-500/30' : 'bg-zinc-800 text-zinc-500'}`}>{r.l}</button>
+              ))}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={save} className="flex-1 btn-primary bg-emerald-500 text-zinc-950 active:scale-[0.98]">{editing ? 'Сохранить' : 'Добавить'}</button>
+            {editing && <button onClick={() => { del(editing); setEditing(null); setAdding(false) }} className="px-4 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 active:scale-[0.98]">🗑</button>}
+          </div>
         </div>
       )}
 
@@ -1814,16 +1948,14 @@ function EventsScr({ onBack, user, show }) {
           return (
             <div key={ev.id} className="rounded-2xl border border-zinc-800 overflow-hidden" style={{background:'linear-gradient(135deg,#3730a315 0%,#1e1b4b10 100%)'}}>
               <div className="p-4">
-                <div className="flex items-start gap-2 mb-2">
+                <div className="flex items-start justify-between mb-2">
                   <div><div className="font-bold flex items-center gap-2">{ev.icon} {ev.name}{ev.repeats_yearly && <span className="text-[10px] text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded-full">ежегодно</span>}</div><div className="text-xs text-zinc-500 mt-0.5">{ev.date ? new Date(ev.date+'T12:00').toLocaleDateString('ru-RU',{day:'numeric',month:'long',year:'numeric'}) : ''}</div></div>
+                  <button onClick={() => startEdit(ev)} className="text-zinc-600 active:scale-90 p-1 text-lg">⚙️</button>
                 </div>
                 <div className="text-3xl font-black tabular-nums" style={{color: isPast ? '#10b981' : '#f59e0b'}}>{text}</div>
                 <div className="text-sm text-zinc-500">{isPast ? '— прошло' : '— осталось'}</div>
               </div>
-              <div className="flex border-t border-zinc-800/40">
-                <button onClick={() => startEdit(ev)} className="flex-1 py-2.5 text-xs text-zinc-500 font-medium active:bg-zinc-800">✏️ Изменить</button>
-                <button onClick={() => del(ev.id)} className="flex-1 py-2.5 text-xs text-rose-400 font-medium active:bg-zinc-800 border-l border-zinc-800/40">🗑 Удалить</button>
-              </div>
+
             </div>
           )
         })}
